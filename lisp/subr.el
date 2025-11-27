@@ -1,6 +1,6 @@
 ;;; subr.el --- basic lisp subroutines for Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1985-2025 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: internal
@@ -161,11 +161,12 @@ of previous VARs.
     `(progn . ,(nreverse exps))))
 
 (defmacro setq-local (&rest pairs)
-  "Make each VARIABLE buffer-local and assign to it the corresponding VALUE.
+  "Make each VARIABLE local to current buffer and set it to corresponding VALUE.
 
 The arguments are variable/value pairs.  For each VARIABLE in a pair,
-make VARIABLE buffer-local and assign to it the corresponding VALUE
-of the pair.  The VARIABLEs are literal symbols and should not be quoted.
+make VARIABLE buffer-local in the current buffer and assign to it the
+corresponding VALUE of the pair.  The VARIABLEs are literal symbols
+and should not be quoted.
 
 The VALUE of the Nth pair is not computed until after the VARIABLE
 of the (N-1)th pair is set; thus, each VALUE can use the new VALUEs
@@ -245,8 +246,12 @@ STATES should be an object returned by `buffer-local-set-state'."
 
 (defmacro push (newelt place)
   "Add NEWELT to the list stored in the generalized variable PLACE.
+
 This is morally equivalent to (setf PLACE (cons NEWELT PLACE)),
-except that PLACE is evaluated only once (after NEWELT)."
+except that PLACE is evaluated only once (after NEWELT).
+
+For more information about generalized variables, see Info node
+`(elisp) Generalized Variables'."
   (declare (debug (form gv-place)))
   (if (symbolp place)
       ;; Important special case, to avoid triggering GV too early in
@@ -260,9 +265,13 @@ except that PLACE is evaluated only once (after NEWELT)."
 
 (defmacro pop (place)
   "Return the first element of PLACE's value, and remove it from the list.
+
 PLACE must be a generalized variable whose value is a list.
 If the value is nil, `pop' returns nil but does not actually
-change the list."
+change the list.
+
+For more information about generalized variables, see Info node
+`(elisp) Generalized Variables'."
   (declare (debug (gv-place)))
   ;; We use `car-safe' here instead of `car' because the behavior is the same
   ;; (if it's not a cons cell, the `cdr' would have signaled an error already),
@@ -299,7 +308,7 @@ value of last one, or nil if there are none."
   (if body
       (list 'if cond (cons 'progn body))
     (macroexp-warn-and-return (format-message "`when' with empty body")
-                              cond '(empty-body when) t)))
+                              (list 'progn cond nil) '(empty-body when) t)))
 
 (defmacro unless (cond &rest body)
   "If COND yields nil, do BODY, else return nil.
@@ -309,21 +318,21 @@ value of last one, or nil if there are none."
   (if body
       (cons 'if (cons cond (cons nil body)))
     (macroexp-warn-and-return (format-message "`unless' with empty body")
-                              cond '(empty-body unless) t)))
+                              (list 'progn cond nil) '(empty-body unless) t)))
 
 (defsubst subr-primitive-p (object)
   "Return t if OBJECT is a built-in primitive written in C.
 Such objects can be functions or special forms."
   (declare (side-effect-free error-free))
   (and (subrp object)
-       (not (subr-native-elisp-p object))))
+       (not (native-comp-function-p object))))
 
 (defsubst primitive-function-p (object)
   "Return t if OBJECT is a built-in primitive function.
 This excludes special forms, since they are not functions."
   (declare (side-effect-free error-free))
   (and (subrp object)
-       (not (or (subr-native-elisp-p object)
+       (not (or (native-comp-function-p object)
                 (eq (cdr (subr-arity object)) 'unevalled)))))
 
 (defsubst xor (cond1 cond2)
@@ -481,7 +490,7 @@ for the sake of consistency.
 
 To alter the look of the displayed error messages, you can use
 the `command-error-function' variable."
-  (declare (ftype (function (string &rest t) nil))
+  (declare (ftype (function (&rest t) nil))
            (advertised-calling-convention (string &rest args) "23.1"))
   (signal 'error (list (apply #'format-message args))))
 
@@ -571,10 +580,10 @@ If COUNT is negative, shifting is actually to the right.
 In this case, if VALUE is a negative fixnum treat it as unsigned,
 i.e., subtract 2 * `most-negative-fixnum' from VALUE before shifting it.
 
-Most uses of this function turn out to be mistakes.  We recommend
-to use `ash' instead, unless COUNT could ever be negative, and
-if, when COUNT is negative, your program really needs the special
-treatment of negative COUNT provided by this function."
+Most uses of this function turn out to be mistakes.  We recommend using
+`ash' instead, unless COUNT could ever be negative, in which case your
+program should only use this function if it specifically requires the
+special handling of negative COUNT."
   (declare (ftype (function (integer integer) integer))
            (compiler-macro
             (lambda (form)
@@ -1507,7 +1516,7 @@ The normal global definition of the character ESC indirects to this keymap.")
 (make-obsolete 'ESC-prefix 'esc-map "28.1")
 
 (defvar ctl-x-4-map (make-sparse-keymap)
-  "Keymap for subcommands of C-x 4.")
+  "Keymap for subcommands of \\`C-x 4'.")
 (defalias 'ctl-x-4-prefix ctl-x-4-map)
 
 (defvar ctl-x-5-map (make-sparse-keymap)
@@ -1530,8 +1539,9 @@ The normal global definition of the character ESC indirects to this keymap.")
     (define-key map "<" #'scroll-left)
     (define-key map ">" #'scroll-right)
     map)
-  "Default keymap for C-x commands.
-The normal global definition of the character C-x indirects to this keymap.")
+  "Default keymap for \\`C-x' commands.
+The normal global definition of the character \\`C-x' indirects to this
+keymap.")
 (fset 'Control-X-prefix ctl-x-map)
 (make-obsolete 'Control-X-prefix 'ctl-x-map "28.1")
 
@@ -2089,6 +2099,9 @@ instead; it will indirectly limit the specpdl stack size as well.")
   "Add to the value of HOOK the function FUNCTION.
 FUNCTION is not added if already present.
 
+HOOK should be a symbol.  If HOOK is void, or if HOOK's value is a
+single function, it is changed to a list of functions.
+
 The place where the function is added depends on the DEPTH
 parameter.  DEPTH defaults to 0.  By convention, it should be
 a number between -100 and 100 where 100 means that the function
@@ -2106,10 +2119,6 @@ the hook's buffer-local value rather than its global value.
 This makes the hook buffer-local, and it makes t a member of the
 buffer-local value.  That acts as a flag to run the hook
 functions of the global value as well as in the local value.
-
-HOOK should be a symbol.  If HOOK is void, it is first set to
-nil.  If HOOK's value is a single function, it is changed to a
-list of functions.
 
 FUNCTION may be any valid function, but it's recommended to use a
 function symbol and not a lambda form.  Using a symbol will
@@ -2175,10 +2184,11 @@ performance impact when running `add-hook' and `remove-hook'."
       (set-default hook hook-value))))
 
 (defun remove-hook (hook function &optional local)
-  "Remove from the value of HOOK the function FUNCTION.
-HOOK should be a symbol, and FUNCTION may be any valid function.  If
-FUNCTION isn't the value of HOOK, or, if FUNCTION doesn't appear in the
-list of hooks to run in HOOK, then nothing is done.  See `add-hook'.
+  "Remove FUNCTION from HOOK's functions.
+HOOK should be a symbol, and FUNCTION may be any valid function.
+Do nothing if HOOK does not currently contain FUNCTION.
+Compare functions with `equal`, which means that it can be
+slow if FUNCTION is not a symbol.  See `add-hook'.
 
 The optional third argument, LOCAL, if non-nil, says to modify
 the hook's buffer-local value rather than its default value.
@@ -2385,9 +2395,11 @@ LIST-VAR should not refer to a lexical variable.
 
 The return value is the new value of LIST-VAR.
 
-This is handy to add some elements to configuration variables,
-but please do not abuse it in Elisp code, where you are usually
-better off using `push' or `cl-pushnew'.
+This is meant to be used for adding elements to configuration
+variables, such as adding a directory to a path variable
+like `load-path', but please do not abuse it to construct
+arbitrary lists in Elisp code, where using `push' or `cl-pushnew'
+will get you more efficient code.
 
 If you want to use `add-to-list' on a variable that is not
 defined until a certain package is loaded, you should put the
@@ -2622,8 +2634,17 @@ Affects only hooks run in the current buffer."
 
 (defmacro if-let* (varlist then &rest else)
   "Bind variables according to VARLIST and evaluate THEN or ELSE.
-This is like `if-let' but doesn't handle a VARLIST of the form
-\(SYMBOL SOMETHING) specially."
+Evaluate each binding in turn, as in `let*', stopping if a
+binding value is nil.  If all are non-nil return the value of
+THEN, otherwise the value of the last form in ELSE, or nil if
+there are none.
+
+Each element of VARLIST is a list (SYMBOL VALUEFORM) that binds
+SYMBOL to the value of VALUEFORM.  An element can additionally be
+of the form (VALUEFORM), which is evaluated and checked for nil;
+i.e. SYMBOL can be omitted if only the test result is of
+interest.  It can also be of the form SYMBOL, then the binding of
+SYMBOL is checked for nil."
   (declare (indent 2)
            (debug ((&rest [&or symbolp (symbolp form) (form)])
                    body)))
@@ -2636,15 +2657,26 @@ This is like `if-let' but doesn't handle a VARLIST of the form
 
 (defmacro when-let* (varlist &rest body)
   "Bind variables according to VARLIST and conditionally evaluate BODY.
-This is like `when-let' but doesn't handle a VARLIST of the form
-\(SYMBOL SOMETHING) specially."
+Evaluate each binding in turn, stopping if a binding value is nil.
+If all are non-nil, return the value of the last form in BODY.
+
+The variable list VARLIST is the same as in `if-let*'.
+
+See also `and-let*'."
   (declare (indent 1) (debug if-let*))
   (list 'if-let* varlist (macroexp-progn body)))
 
 (defmacro and-let* (varlist &rest body)
   "Bind variables according to VARLIST and conditionally evaluate BODY.
 Like `when-let*', except if BODY is empty and all the bindings
-are non-nil, then the result is the value of the last binding."
+are non-nil, then the result is the value of the last binding.
+
+Some Lisp programmers follow the convention that `and' and `and-let*'
+are for forms evaluated for return value, and `when' and `when-let*' are
+for forms evaluated for side-effect with returned values ignored."
+  ;; ^ Document this convention here because it explains why we have
+  ;;   both `when-let*' and `and-let*' (in addition to the additional
+  ;;   feature of `and-let*' when BODY is empty).
   (declare (indent 1) (debug if-let*))
   (let (res)
     (if varlist
@@ -2655,21 +2687,13 @@ are non-nil, then the result is the value of the last binding."
 
 (defmacro if-let (spec then &rest else)
   "Bind variables according to SPEC and evaluate THEN or ELSE.
-Evaluate each binding in turn, as in `let*', stopping if a
-binding value is nil.  If all are non-nil return the value of
-THEN, otherwise the value of the last form in ELSE, or nil if
-there are none.
+This is like `if-let*' except, as a special case, interpret a SPEC of
+the form \(SYMBOL SOMETHING) like \((SYMBOL SOMETHING)).  This exists
+for backward compatibility with an old syntax that accepted only one
+binding.
 
-Each element of SPEC is a list (SYMBOL VALUEFORM) that binds
-SYMBOL to the value of VALUEFORM.  An element can additionally be
-of the form (VALUEFORM), which is evaluated and checked for nil;
-i.e. SYMBOL can be omitted if only the test result is of
-interest.  It can also be of the form SYMBOL, then the binding of
-SYMBOL is checked for nil.
-
-As a special case, interprets a SPEC of the form \(SYMBOL SOMETHING)
-like \((SYMBOL SOMETHING)).  This exists for backward compatibility
-with an old syntax that accepted only one binding."
+This macro will be marked obsolete in Emacs 31.1; prefer `if-let*' in
+new code."
   (declare (indent 2)
            (debug ([&or (symbolp form)  ; must be first, Bug#48489
                         (&rest [&or symbolp (symbolp form) (form)])]
@@ -2685,7 +2709,10 @@ with an old syntax that accepted only one binding."
 Evaluate each binding in turn, stopping if a binding value is nil.
 If all are non-nil, return the value of the last form in BODY.
 
-The variable list SPEC is the same as in `if-let'."
+The variable list SPEC is the same as in `if-let'.
+
+This macro will be marked obsolete in Emacs 31.1; prefer `when-let*' and
+`and-let*' in new code."
   (declare (indent 1) (debug if-let))
   (list 'if-let spec (macroexp-progn body)))
 
@@ -3022,7 +3049,7 @@ This is to `put' what `defalias' is to `fset'."
 
 (defvar comp-native-version-dir)
 (defvar native-comp-eln-load-path)
-(declare-function subr-native-elisp-p "data.c")
+(declare-function native-comp-function-p "data.c")
 (declare-function native-comp-unit-file "data.c")
 (declare-function subr-native-comp-unit "data.c")
 (declare-function comp-el-to-eln-rel-filename "comp.c")
@@ -3071,7 +3098,7 @@ instead."
 	     (symbolp symbol)
 	     (native-comp-available-p)
 	     ;; If it's a defun, we have a shortcut.
-	     (subr-native-elisp-p (symbol-function symbol)))
+	     (native-comp-function-p (symbol-function symbol)))
 	;; native-comp-unit-file returns unnormalized file names.
 	(expand-file-name (native-comp-unit-file (subr-native-comp-unit
 						  (symbol-function symbol))))
@@ -3245,13 +3272,19 @@ process."
 
 (defun process-get (process propname)
   "Return the value of PROCESS' PROPNAME property.
-This is the last value stored with `(process-put PROCESS PROPNAME VALUE)'."
+This is the last value stored with `(process-put PROCESS PROPNAME VALUE)'.
+
+Together with `process-put', this can be used to store and retrieve
+miscellaneous values associated with the process."
   (declare (side-effect-free t))
   (plist-get (process-plist process) propname))
 
 (defun process-put (process propname value)
   "Change PROCESS' PROPNAME property to VALUE.
-It can be retrieved with `(process-get PROCESS PROPNAME)'."
+It can be retrieved with `(process-get PROCESS PROPNAME)'.
+
+Together with `process-get', this can be used to store and retrieve
+miscellaneous values associated with the process."
   (set-process-plist process
 		     (plist-put (process-plist process) propname value)))
 
@@ -3285,7 +3318,7 @@ It can be retrieved with `(process-get PROCESS PROPNAME)'."
 (defvar read-key-delay 0.01) ;Fast enough for 100Hz repeat rate, hopefully.
 
 (defun read-key (&optional prompt disable-fallbacks)
-  "Read a key from the keyboard.
+  "Read a key from the keyboard, return the event thus read.
 Contrary to `read-event' this will not return a raw event but instead will
 obey the input decoding and translations usually done by `read-key-sequence'.
 So escape sequences and keyboard encoding are taken into account.
@@ -3359,7 +3392,7 @@ only unbound fallback disabled is downcasing of the last event."
                                                              nil nil t)))
                  (key (aref keys 0)))
             (if (and (> (length keys) 1)
-                     (memq key '(mode-line header-line
+                     (memq key '(mode-line header-line tab-line
                                  left-fringe right-fringe)))
                 (aref keys 1)
               key)))
@@ -3372,8 +3405,8 @@ only unbound fallback disabled is downcasing of the last event."
 
 (defvar touch-screen-events-received nil
   "Whether a touch screen event has ever been translated.
-The value of this variable governs whether
-`read--potential-mouse-event' calls read-key or read-event.")
+The value of this variable governs whether `read--potential-mouse-event'
+calls `read-key' or `read-event'.")
 
 ;; FIXME: Once there's a safe way to transition away from read-event,
 ;; callers to this function should be updated to that way and this
@@ -3399,11 +3432,12 @@ with Emacs.  Do not call it directly in your own packages."
   "The default history for the `read-number' function.")
 
 (defun read-number (prompt &optional default hist)
-  "Read a numeric value in the minibuffer, prompting with PROMPT.
+  "Read from the minibuffer and return a numeric value, prompting with PROMPT.
 DEFAULT specifies a default value to return if the user just types RET.
-The value of DEFAULT is inserted into PROMPT.
-HIST specifies a history list variable.  See `read-from-minibuffer'
-for details of the HIST argument.
+For historical reasons, the value of DEFAULT is always inserted into
+PROMPT, so it's recommended to use `format' instead of `format-prompt'
+to generate PROMPT.  HIST specifies a history list variable.  See
+`read-from-minibuffer' for details of the HIST argument.
 
 This function is used by the `interactive' code letter \"n\"."
   (let ((n nil)
@@ -3510,13 +3544,15 @@ causes it to evaluate `help-form' and display the result."
     char))
 
 (defun sit-for (seconds &optional nodisp)
-  "Redisplay, then wait for SECONDS seconds.  Stop when input is available.
+  "Redisplay, then wait for SECONDS seconds; stop when input is available.
 SECONDS may be a floating-point value.
 \(On operating systems that do not support waiting for fractions of a
 second, floating-point values are rounded down to the nearest integer.)
 
-If optional arg NODISP is t, don't redisplay, just wait for input.
-Redisplay does not happen if input is available before it starts.
+If there's pending input, return nil immediately without redisplaying
+and without waiting.
+If optional arg NODISP is t, don't redisplay, just wait for input (but
+still return nil immediately if there's pending input).
 
 Value is t if waited the full time with no input arriving, and nil otherwise."
   ;; This used to be implemented in C until the following discussion:
@@ -4460,6 +4496,12 @@ or byte-code."
   (or (and (subrp object) (not (eq 'unevalled (cdr (subr-arity object)))))
       (byte-code-function-p object)))
 
+(defun integer-or-null-p (object)
+  "Return non-nil if OBJECT is either an integer or nil.
+Otherwise, return nil."
+  (declare (pure t) (side-effect-free error-free))
+  (or (integerp object) (null object)))
+
 (defun field-at-pos (pos)
   "Return the field at position POS, taking stickiness etc into account."
   (declare (important-return-value t))
@@ -4472,8 +4514,8 @@ or byte-code."
   "Return the SHA-1 (Secure Hash Algorithm) of an OBJECT.
 OBJECT is either a string or a buffer.  Optional arguments START and
 END are character positions specifying which portion of OBJECT for
-computing the hash.  If BINARY is non-nil, return a 40-byte unibyte
-string; otherwise returna 40-character string.
+computing the hash.  If BINARY is non-nil, return a 20-byte unibyte
+string; otherwise return a 40-character string.
 
 Note that SHA-1 is not collision resistant and should not be used
 for anything security-related.  See `secure-hash' for
@@ -5082,8 +5124,7 @@ of that nature."
        (unwind-protect
            (progn
              ,@body)
-         (when (or (not ,modified)
-                   (eq ,modified 'autosaved))
+         (when (memq ,modified '(nil autosaved))
            (restore-buffer-modified-p ,modified))))))
 
 (defmacro with-output-to-string (&rest body)
@@ -5701,7 +5742,7 @@ Unless optional argument INPLACE is non-nil, return a new string."
            (if (multibyte-string-p string)
                (> (max fromchar tochar) 127)
              (> tochar 255)))
-      ;; Avoid quadratic behaviour from resizing replacement.
+      ;; Avoid quadratic behavior from resizing replacement.
       (let ((res (string-replace (string fromchar) (string tochar) string)))
         (unless (eq res string)
           ;; Mend properties broken by the replacement.
@@ -7311,7 +7352,7 @@ not a list, return a one-element list containing OBJECT."
 The MESSAGE form will be evaluated immediately, but the resulting
 string will be displayed only if BODY takes longer than TIMEOUT seconds.
 
-\(fn (timeout message) &rest body)"
+\(fn (TIMEOUT MESSAGE) &rest BODY)"
   (declare (indent 1))
   `(funcall-with-delayed-message ,(car args) ,(cadr args)
                                  (lambda ()
@@ -7423,9 +7464,10 @@ CONDITION is either:
   * `major-mode': the buffer matches if the buffer's major mode
     is eq to the cons-cell's cdr.  Prefer using `derived-mode'
     instead when both can work.
-  * `category': the buffer matches a category as a symbol if
-    the caller of `display-buffer' provides `(category . symbol)'
-    in its action argument.
+  * `category': when this function is called from `display-buffer',
+    the buffer matches if the caller of `display-buffer' provides
+    `(category . SYMBOL)' in its ACTION argument, and SYMBOL is `eq'
+    to the cons-cell's cdr.
   * `not': the cadr is interpreted as a negation of a condition.
   * `and': the cdr is a list of recursive conditions, that all have
     to be met.

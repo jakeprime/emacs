@@ -1,6 +1,6 @@
 ;;; files-x.el --- extended file handling commands  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2025 Free Software Foundation, Inc.
 
 ;; Author: Juri Linkov <juri@jurta.org>
 ;; Maintainer: emacs-devel@gnu.org
@@ -38,7 +38,9 @@
 ;;; Commands to add/delete file-local/directory-local variables.
 
 (defun read-file-local-variable (prompt)
-  "Read file-local variable using PROMPT and completion.
+  "Read the name of a file-local variable using PROMPT and completion.
+Return the symbol of the variable, or nil if the user entered empty or
+null name.
 Intended to be used in the `interactive' spec of
 `add-file-local-variable', `delete-file-local-variable',
 `add-dir-local-variable', `delete-dir-local-variable'."
@@ -57,7 +59,7 @@ Intended to be used in the `interactive' spec of
     (and (stringp variable) (intern variable))))
 
 (defun read-file-local-variable-value (variable)
-  "Read value of file-local VARIABLE using completion.
+  "Read and return the value of a file-local VARIABLE using completion.
 Intended to be used in the `interactive' spec of
 `add-file-local-variable' and `add-dir-local-variable'."
   (cond
@@ -90,7 +92,9 @@ Intended to be used in the `interactive' spec of
 			    default)))))
 
 (defun read-file-local-variable-mode ()
-  "Read per-directory file-local variable's mode using completion.
+  "Read the name of a per-directory file-local variable's mode using completion.
+Return the symbol of the variable, or nil if the user entered empty or
+null name.
 Intended to be used in the `interactive' spec of
 `add-dir-local-variable', `delete-dir-local-variable'."
   (let* ((default (and (symbolp major-mode) (symbol-name major-mode)))
@@ -155,7 +159,10 @@ is not `delete' then this function adds the first line containing the
 string `Local Variables:' and the last line containing the string `End:'.
 
 If OP is `delete' then delete all existing settings of VARIABLE
-from the Local Variables list ignoring the input argument VALUE."
+from the Local Variables list ignoring the input argument VALUE.
+
+If optional variable INTERACTIVE is non-nil, display a message telling
+the user how to make the new value take effect."
   (catch 'exit
     (let ((beg (point)) end replaced-pos)
       (unless enable-local-variables
@@ -239,24 +246,35 @@ This command deletes all existing settings of VARIABLE (except `mode'
 and `eval') and adds a new file-local VARIABLE with VALUE to the
 Local Variables list.
 
-If there is no Local Variables list in the current file buffer
-then this function adds the first line containing the string
-`Local Variables:' and the last line containing the string `End:'."
+If there is no Local Variables list in the current file buffer,
+then this function adds it at the end of the file, with the first
+line containing the string `Local Variables:' and the last line
+containing the string `End:'.
+
+For adding local variables on the first line of a file, for example
+for settings like `lexical-binding, which must be specified there,
+use the `add-file-local-variable-prop-line' command instead.
+
+If optional variable INTERACTIVE is non-nil, display a message telling
+the user how to make the new value take effect."
   (interactive
    (let ((variable (read-file-local-variable "Add file-local variable")))
      ;; Error before reading value.
      (if (equal variable 'lexical-binding)
-	 (user-error "The `%s' variable must be set at the start of the file"
+	 (user-error "Use `add-file-local-variable-prop-line' to add the `%s' variable"
 		     variable))
      (list variable (read-file-local-variable-value variable) t)))
   (if (equal variable 'lexical-binding)
-      (user-error "The `%s' variable must be set at the start of the file"
+      (user-error "Use `add-file-local-variable-prop-line' to add the `%s' variable"
                   variable))
   (modify-file-local-variable variable value 'add-or-replace interactive))
 
 ;;;###autoload
 (defun delete-file-local-variable (variable &optional interactive)
-  "Delete all settings of file-local VARIABLE from the Local Variables list."
+  "Delete all settings of file-local VARIABLE from the Local Variables list.
+
+If optional variable INTERACTIVE is non-nil, display a message telling
+the user how to make the new value take effect."
   (interactive
    (list (read-file-local-variable "Delete file-local variable") t))
   (modify-file-local-variable variable nil 'delete interactive))
@@ -272,7 +290,10 @@ If there is no -*- line at the beginning of the current file buffer
 and OP is not `delete' then this function adds the -*- line.
 
 If OP is `delete' then delete all existing settings of VARIABLE
-from the -*- line ignoring the input argument VALUE."
+from the -*- line ignoring the input argument VALUE.
+
+If optional variable INTERACTIVE is non-nil, display a message telling
+the user how to make the new value take effect."
   (catch 'exit
     (let ((beg (point)) end replaced-pos)
       (unless enable-local-variables
@@ -394,10 +415,16 @@ from the -*- line ignoring the input argument VALUE."
 
 This command deletes all existing settings of VARIABLE (except `mode'
 and `eval') and adds a new file-local VARIABLE with VALUE to
-the -*- line.
+the -*- line at the beginning of the file.
 
 If there is no -*- line at the beginning of the current file buffer
-then this function adds it."
+then this function adds it.
+
+To add variables to the Local Variables list at the end of the file,
+use the `add-file-local-variable' command instead.
+
+If optional variable INTERACTIVE is non-nil, display a message telling
+the user how to make the new value take effect."
   (interactive
    (let ((variable (read-file-local-variable "Add -*- file-local variable")))
      (list variable (read-file-local-variable-value variable) t)))
@@ -405,7 +432,10 @@ then this function adds it."
 
 ;;;###autoload
 (defun delete-file-local-variable-prop-line (variable &optional interactive)
-  "Delete all settings of file-local VARIABLE from the -*- line."
+  "Delete all settings of file-local VARIABLE from the -*- line.
+
+If optional variable INTERACTIVE is non-nil, display a message telling
+the user how to make the new value take effect."
   (interactive
    (list (read-file-local-variable "Delete -*- file-local variable") t))
   (modify-file-local-variable-prop-line variable nil 'delete interactive))

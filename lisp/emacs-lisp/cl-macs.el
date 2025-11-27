@@ -1,6 +1,6 @@
 ;;; cl-macs.el --- Common Lisp macros  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1993, 2001-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1993, 2001-2025 Free Software Foundation, Inc.
 
 ;; Author: Dave Gillespie <daveg@synaptics.com>
 ;; Old-Version: 2.02
@@ -2067,15 +2067,15 @@ a `let' form, except that the list of symbols can be computed at run-time."
 ;;;###autoload
 (defmacro cl-flet (bindings &rest body)
   "Make local function definitions.
-Each definition can take the form (FUNC EXP) where
-FUNC is the function name, and EXP is an expression that returns the
-function value to which it should be bound, or it can take the more common
-form (FUNC ARGLIST BODY...) which is a shorthand
-for (FUNC (lambda ARGLIST BODY)).
 
-FUNC is defined only within FORM, not BODY, so you can't write
-recursive function definitions.  Use `cl-labels' for that.  See
-info node `(cl) Function Bindings' for details.
+Each definition can take the form (FUNC EXP) where FUNC is the function
+name, and EXP is an expression that returns the function value to which
+it should be bound, or it can take the more common form (FUNC ARGLIST
+BODY...) which is a shorthand for (FUNC (lambda ARGLIST BODY)).
+
+FUNC is defined only within FORM, not BODY, so you can't write recursive
+function definitions.  Use `cl-labels' for that.  See Info node
+`(cl) Function Bindings' for details.
 
 \(fn ((FUNC ARGLIST BODY...) ...) FORM...)"
   (declare (indent 1)
@@ -2250,12 +2250,15 @@ Like `cl-flet' but the definitions can refer to previous ones.
 ;;;###autoload
 (defmacro cl-labels (bindings &rest body)
   "Make local (recursive) function definitions.
-BINDINGS is a list of definitions of the form (FUNC ARGLIST BODY...) where
-FUNC is the function name, ARGLIST its arguments, and BODY the
-forms of the function body.  FUNC is defined in any BODY, as well
-as FORM, so you can write recursive and mutually recursive
-function definitions.  See info node `(cl) Function Bindings' for
-details.
+
+Each definition can take the form (FUNC EXP) where FUNC is the function
+name, and EXP is an expression that returns the function value to which
+it should be bound, or it can take the more common form (FUNC ARGLIST
+BODY...) which is a shorthand for (FUNC (lambda ARGLIST BODY)).
+
+FUNC is defined in any BODY, as well as FORM, so you can write recursive
+and mutually recursive function definitions.  See Info node
+`(cl) Function Bindings' for details.
 
 \(fn ((FUNC ARGLIST BODY...) ...) FORM...)"
   (declare (indent 1) (debug cl-flet))
@@ -2505,7 +2508,7 @@ by EXPANSION, and (setq NAME ...) will act like (setf EXPANSION ...).
 (defmacro cl-once-only (names &rest body)
   "Generate code to evaluate each of NAMES just once in BODY.
 
-This macro helps with writing other macros.  Each of names is
+This macro helps with writing other macros.  Each of NAMES is
 either (NAME FORM) or NAME, which latter means (NAME NAME).
 During macroexpansion, each NAME is bound to an uninterned
 symbol.  The expansion evaluates each FORM and binds it to the
@@ -2667,7 +2670,7 @@ Example:
 	 (let ((speed (assq (nth 1 (assq 'speed (cdr spec)))
 			    '((0 nil) (1 t) (2 t) (3 t))))
 	       (safety (assq (nth 1 (assq 'safety (cdr spec)))
-			     '((0 t) (1 t) (2 t) (3 nil)))))
+			     '((0 t) (1 nil) (2 nil) (3 nil)))))
 	   (if speed (setq cl--optimize-speed (car speed)
 			   byte-optimize (nth 1 speed)))
 	   (if safety (setq cl--optimize-safety (car safety)
@@ -3546,7 +3549,10 @@ Of course, we really can't know that for sure, so it's just a heuristic."
 ;;;###autoload
 (defmacro cl-check-type (form type &optional string)
   "Verify that FORM is of type TYPE; signal an error if not.
-STRING is an optional description of the desired type."
+STRING is an optional description of the desired type.
+
+Hint: To check the type of an object, use `cl-type-of'.
+To define new types, see `cl-deftype'."
   (declare (debug (place cl-type-spec &optional stringp)))
   (and (or (not (macroexp-compiling-p))
 	   (< cl--optimize-speed 3) (= cl--optimize-safety 3))

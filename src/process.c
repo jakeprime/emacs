@@ -1,6 +1,6 @@
 /* Asynchronous subprocess control for GNU Emacs.
 
-Copyright (C) 1985-1988, 1993-1996, 1998-1999, 2001-2024 Free Software
+Copyright (C) 1985-1988, 1993-1996, 1998-1999, 2001-2025 Free Software
 Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -275,9 +275,9 @@ static int read_process_output (Lisp_Object, int);
 static void create_pty (Lisp_Object);
 static void exec_sentinel (Lisp_Object, Lisp_Object);
 
-static Lisp_Object
-network_lookup_address_info_1 (Lisp_Object host, const char *service,
-                               struct addrinfo *hints, struct addrinfo **res);
+static Lisp_Object network_lookup_address_info_1 (Lisp_Object, const char *,
+						  struct addrinfo *,
+						  struct addrinfo **);
 
 /* Number of bits set in connect_wait_mask.  */
 static int num_pending_connects;
@@ -926,6 +926,8 @@ make_process (Lisp_Object name)
   eassert (p->gnutls_initstage == GNUTLS_STAGE_EMPTY);
   eassert (NILP (p->gnutls_boot_parameters));
 #endif
+
+  p->readmax = clip_to_bounds (1, read_process_output_max, INT_MAX);
 
   /* If name is already in use, modify it until it is unused.  */
 
@@ -2210,11 +2212,8 @@ create_process (Lisp_Object process, char **new_argv, Lisp_Object current_dir)
 #if defined(F_SETPIPE_SZ) && defined(F_GETPIPE_SZ)
       /* If they requested larger reads than the default system pipe
          capacity, try enlarging the capacity to match the request.  */
-      if (read_process_output_max > fcntl (inchannel, F_GETPIPE_SZ))
-	{
-	  int readmax = clip_to_bounds (1, read_process_output_max, INT_MAX);
-	  fcntl (inchannel, F_SETPIPE_SZ, readmax);
-	}
+      if (p->readmax > fcntl (inchannel, F_GETPIPE_SZ))
+	fcntl (inchannel, F_SETPIPE_SZ, p->readmax);
 #endif
     }
 
@@ -4606,7 +4605,7 @@ network_interface_info (Lisp_Object ifname)
 DEFUN ("network-interface-list", Fnetwork_interface_list,
        Snetwork_interface_list, 0, 2, 0,
        doc: /* Return an alist of all network interfaces and their network address.
-Each element is cons of the form (IFNAME . IP) where IFNAME is a
+Each element is a cons of the form (IFNAME . IP) where IFNAME is a
 string containing the interface name, and IP is the network address in
 internal format; see the description of ADDRESS in
 `make-network-process'.  The interface name is not guaranteed to be
@@ -4657,7 +4656,8 @@ where ADDR is the layer 3 address, BCAST is the layer 3 broadcast address,
 NETMASK is the layer 3 network mask, HWADDR is the layer 2 address, and
 FLAGS is the current flags of the interface.
 
-Data that is unavailable is returned as nil.  */)
+Data that is unavailable is returned as nil.  Only returns IPv4 layer 3
+addresses, for IPv6 use `network-interface-list'.  */)
   (Lisp_Object ifname)
 {
 #if ((defined HAVE_NET_IF_H			       \
@@ -4712,6 +4712,9 @@ network_lookup_address_info_1 (Lisp_Object host, const char *service,
 DEFUN ("network-lookup-address-info", Fnetwork_lookup_address_info,
        Snetwork_lookup_address_info, 1, 3, 0,
        doc: /* Look up Internet Protocol (IP) address info of NAME.
+NAME must be an ASCII-only string.  For looking up internationalized
+hostnames, use `puny-encode-domain' on the string first.
+
 Optional argument FAMILY controls whether to look up IPv4 or IPv6
 addresses.  The default of nil means both, symbol `ipv4' means IPv4
 only, symbol `ipv6' means IPv6 only.
@@ -4730,6 +4733,8 @@ returned from the lookup.  */)
 
   struct addrinfo *res, *lres;
   struct addrinfo hints;
+
+  CHECK_STRING (name);
 
   memset (&hints, 0, sizeof hints);
   if (NILP (family))
@@ -5351,7 +5356,7 @@ wait_reading_process_output (intmax_t time_limit, int nsecs, int read_kbd,
 	struct Lisp_Process *p;
 
 	retry_for_async = false;
-	FOR_EACH_PROCESS(process_list_head, aproc)
+	FOR_EACH_PROCESS (process_list_head, aproc)
 	  {
 	    p = XPROCESS (aproc);
 
@@ -5707,9 +5712,9 @@ wait_reading_process_output (intmax_t time_limit, int nsecs, int read_kbd,
 	  /* If wait_proc is somebody else, we have to wait in select
 	     as usual.  Otherwise, clobber the timeout. */
 	  if (tls_nfds > 0
-	      && (!wait_proc ||
-		  (wait_proc->infd >= 0
-		   && FD_ISSET (wait_proc->infd, &tls_available))))
+	      && (!wait_proc
+		  || (wait_proc->infd >= 0
+		      && FD_ISSET (wait_proc->infd, &tls_available))))
 	    timeout = make_timespec (0, 0);
 #endif
 
@@ -5770,8 +5775,8 @@ wait_reading_process_output (intmax_t time_limit, int nsecs, int read_kbd,
 		/* Slow path, merge one by one.  Note: nfds does not need
 		   to be accurate, just positive is enough. */
 		for (channel = 0; channel < FD_SETSIZE; ++channel)
-		  if (FD_ISSET(channel, &tls_available))
-		    FD_SET(channel, &Available);
+		  if (FD_ISSET (channel, &tls_available))
+		    FD_SET (channel, &Available);
 	    }
 #endif
 	}
@@ -6141,10 +6146,13 @@ read_process_output_error_handler (Lisp_Object error_val)
   return Qt;
 }
 
-static void
-read_and_dispose_of_process_output (struct Lisp_Process *p, char *chars,
-				    ssize_t nbytes,
-				    struct coding_system *coding);
+static void read_and_dispose_of_process_output (struct Lisp_Process *, char *,
+						ssize_t,
+						struct coding_system *);
+
+static void read_and_insert_process_output (struct Lisp_Process *, char *,
+					    ssize_t,
+					    struct coding_system *);
 
 /* Read pending output from the process channel,
    starting with our buffered-ahead character if we have one.
@@ -6166,7 +6174,7 @@ read_process_output (Lisp_Object proc, int channel)
   eassert (0 <= channel && channel < FD_SETSIZE);
   struct coding_system *coding = proc_decode_coding_system[channel];
   int carryover = p->decoding_carryover;
-  ptrdiff_t readmax = clip_to_bounds (1, read_process_output_max, PTRDIFF_MAX);
+  ptrdiff_t readmax = p->readmax;
   specpdl_ref count = SPECPDL_INDEX ();
   Lisp_Object odeactivate;
   char *chars;
@@ -6271,6 +6279,176 @@ read_process_output (Lisp_Object proc, int channel)
 }
 
 static void
+read_process_output_before_insert (struct Lisp_Process *p, Lisp_Object *old_read_only,
+				   ptrdiff_t *old_begv, ptrdiff_t *old_zv,
+				   ptrdiff_t *before, ptrdiff_t *before_byte,
+				   ptrdiff_t *opoint, ptrdiff_t *opoint_byte)
+{
+  Fset_buffer (p->buffer);
+  *opoint = PT;
+  *opoint_byte = PT_BYTE;
+  *old_read_only = BVAR (current_buffer, read_only);
+  *old_begv = BEGV;
+  *old_zv = ZV;
+
+  bset_read_only (current_buffer, Qnil);
+
+  /* Insert new output into buffer at the current end-of-output
+     marker, thus preserving logical ordering of input and output.  */
+  if (XMARKER (p->mark)->buffer)
+    set_point_from_marker (p->mark);
+  else
+    SET_PT_BOTH (ZV, ZV_BYTE);
+  *before = PT;
+  *before_byte = PT_BYTE;
+
+  /* If the output marker is outside of the visible region, save
+     the restriction and widen.  */
+  if (! (BEGV <= PT && PT <= ZV))
+    Fwiden ();
+}
+
+static void
+read_process_output_after_insert (struct Lisp_Process *p, Lisp_Object *old_read_only,
+				  ptrdiff_t old_begv, ptrdiff_t old_zv,
+				  ptrdiff_t before, ptrdiff_t before_byte,
+				  ptrdiff_t opoint, ptrdiff_t opoint_byte)
+{
+  struct buffer *b;
+
+  /* Make sure the process marker's position is valid when the
+     process buffer is changed in the signal_after_change above.
+     W3 is known to do that.  */
+  if (BUFFERP (p->buffer)
+      && (b = XBUFFER (p->buffer), b != current_buffer))
+    set_marker_both (p->mark, p->buffer, BUF_PT (b), BUF_PT_BYTE (b));
+  else
+    set_marker_both (p->mark, p->buffer, PT, PT_BYTE);
+
+  update_mode_lines = 23;
+
+  /* Make sure opoint and the old restrictions
+     float ahead of any new text just as point would.  */
+  if (opoint >= before)
+    {
+      opoint += PT - before;
+      opoint_byte += PT_BYTE - before_byte;
+    }
+  if (old_begv > before)
+    old_begv += PT - before;
+  if (old_zv >= before)
+    old_zv += PT - before;
+
+  /* If the restriction isn't what it should be, set it.  */
+  if (old_begv != BEGV || old_zv != ZV)
+    Fnarrow_to_region (make_fixnum (old_begv), make_fixnum (old_zv));
+
+  bset_read_only (current_buffer, *old_read_only);
+  SET_PT_BOTH (opoint, opoint_byte);
+}
+
+static void
+read_process_output_set_last_coding_system (struct Lisp_Process *p,
+					    struct coding_system *coding)
+{
+  Vlast_coding_system_used = CODING_ID_NAME (coding->id);
+  /* A new coding system might be found.  */
+  if (!EQ (p->decode_coding_system, Vlast_coding_system_used))
+    {
+      pset_decode_coding_system (p, Vlast_coding_system_used);
+
+      /* Don't call setup_coding_system for
+	 proc_decode_coding_system[channel] here.  It is done in
+	 detect_coding called via decode_coding above.  */
+
+      /* If a coding system for encoding is not yet decided, we set
+	 it as the same as coding-system for decoding.
+
+	 But, before doing that we must check if
+	 proc_encode_coding_system[p->outfd] surely points to a
+	 valid memory because p->outfd will be changed once EOF is
+	 sent to the process.  */
+      eassert (p->outfd < FD_SETSIZE);
+      if (NILP (p->encode_coding_system) && p->outfd >= 0
+	  && proc_encode_coding_system[p->outfd])
+	{
+	  pset_encode_coding_system
+	    (p, coding_inherit_eol_type (Vlast_coding_system_used, Qnil));
+	  setup_coding_system (p->encode_coding_system,
+			       proc_encode_coding_system[p->outfd]);
+	}
+    }
+
+  if (coding->carryover_bytes > 0)
+    {
+      if (SCHARS (p->decoding_buf) < coding->carryover_bytes)
+	pset_decoding_buf (p, make_uninit_string (coding->carryover_bytes));
+      memcpy (SDATA (p->decoding_buf), coding->carryover,
+	      coding->carryover_bytes);
+      p->decoding_carryover = coding->carryover_bytes;
+    }
+}
+
+static void
+read_and_insert_process_output (struct Lisp_Process *p, char *buf,
+				ssize_t nread,
+				struct coding_system *process_coding)
+{
+  if (!nread || NILP (p->buffer) || !BUFFER_LIVE_P (XBUFFER (p->buffer)))
+    return;
+
+  Lisp_Object old_read_only;
+  ptrdiff_t old_begv, old_zv;
+  ptrdiff_t before, before_byte;
+  ptrdiff_t opoint, opoint_byte;
+
+  read_process_output_before_insert (p, &old_read_only, &old_begv, &old_zv,
+				     &before, &before_byte, &opoint,
+				     &opoint_byte);
+
+  /* Adapted from call_process.  */
+  prepare_to_modify_buffer (PT, PT, NULL);
+
+  if (NILP (BVAR (XBUFFER (p->buffer), enable_multibyte_characters))
+	   && ! CODING_MAY_REQUIRE_DECODING (process_coding))
+    {
+      /* For compatibility with the long-standing behavior of
+	 internal-default-process-filter we insert before markers,
+	 both here and in the 'else' branch.  */
+      insert_1_both (buf, nread, nread, 0, 0, 1);
+      signal_after_change (PT - nread, 0, nread);
+    }
+  else
+    {			/* We have to decode the input.  */
+      Lisp_Object curbuf;
+      specpdl_ref count1 = SPECPDL_INDEX ();
+
+      XSETBUFFER (curbuf, current_buffer);
+      /* See the comment above about inserting before markers.  */
+      process_coding->insert_before_markers = true;
+      /* We cannot allow after-change-functions be run
+	 during decoding, because that might modify the
+	 buffer, while we rely on process_coding.produced to
+	 faithfully reflect inserted text until we
+	 TEMP_SET_PT_BOTH below.  */
+      specbind (Qinhibit_modification_hooks, Qt);
+      decode_coding_c_string (process_coding,
+			      (unsigned char *) buf, nread, curbuf);
+      unbind_to (count1, Qnil);
+
+      read_process_output_set_last_coding_system (p, process_coding);
+
+      TEMP_SET_PT_BOTH (PT + process_coding->produced_char,
+			PT_BYTE + process_coding->produced);
+      signal_after_change (PT - process_coding->produced_char,
+			   0, process_coding->produced_char);
+    }
+
+  read_process_output_after_insert (p, &old_read_only, old_begv, old_zv,
+				    before, before_byte, opoint, opoint_byte);
+}
+
+static void
 read_and_dispose_of_process_output (struct Lisp_Process *p, char *chars,
 				    ssize_t nbytes,
 				    struct coding_system *coding)
@@ -6309,52 +6487,26 @@ read_and_dispose_of_process_output (struct Lisp_Process *p, char *chars,
      save the match data in a special nonrecursive fashion.  */
   running_asynch_code = 1;
 
-  decode_coding_c_string (coding, (unsigned char *) chars, nbytes, Qt);
-  text = coding->dst_object;
-  Vlast_coding_system_used = CODING_ID_NAME (coding->id);
-  /* A new coding system might be found.  */
-  if (!EQ (p->decode_coding_system, Vlast_coding_system_used))
+  if (fast_read_process_output
+      && EQ (p->filter, Qinternal_default_process_filter))
+    read_and_insert_process_output (p, chars, nbytes, coding);
+  else
     {
-      pset_decode_coding_system (p, Vlast_coding_system_used);
+      decode_coding_c_string (coding, (unsigned char *) chars, nbytes, Qt);
+      text = coding->dst_object;
 
-      /* Don't call setup_coding_system for
-	 proc_decode_coding_system[channel] here.  It is done in
-	 detect_coding called via decode_coding above.  */
+      read_process_output_set_last_coding_system (p, coding);
 
-      /* If a coding system for encoding is not yet decided, we set
-	 it as the same as coding-system for decoding.
+      if (SBYTES (text) > 0)
+	/* FIXME: It's wrong to wrap or not based on debug-on-error, and
+	   sometimes it's simply wrong to wrap (e.g. when called from
+	   accept-process-output).  */
+	internal_condition_case_1 (read_process_output_call,
+				   list3 (outstream, make_lisp_proc (p), text),
+				   !NILP (Vdebug_on_error) ? Qnil : Qerror,
+				   read_process_output_error_handler);
 
-	 But, before doing that we must check if
-	 proc_encode_coding_system[p->outfd] surely points to a
-	 valid memory because p->outfd will be changed once EOF is
-	 sent to the process.  */
-      eassert (p->outfd < FD_SETSIZE);
-      if (NILP (p->encode_coding_system) && p->outfd >= 0
-	  && proc_encode_coding_system[p->outfd])
-	{
-	  pset_encode_coding_system
-	    (p, coding_inherit_eol_type (Vlast_coding_system_used, Qnil));
-	  setup_coding_system (p->encode_coding_system,
-			       proc_encode_coding_system[p->outfd]);
-	}
     }
-
-  if (coding->carryover_bytes > 0)
-    {
-      if (SCHARS (p->decoding_buf) < coding->carryover_bytes)
-	pset_decoding_buf (p, make_uninit_string (coding->carryover_bytes));
-      memcpy (SDATA (p->decoding_buf), coding->carryover,
-	      coding->carryover_bytes);
-      p->decoding_carryover = coding->carryover_bytes;
-    }
-  if (SBYTES (text) > 0)
-    /* FIXME: It's wrong to wrap or not based on debug-on-error, and
-       sometimes it's simply wrong to wrap (e.g. when called from
-       accept-process-output).  */
-    internal_condition_case_1 (read_process_output_call,
-			       list3 (outstream, make_lisp_proc (p), text),
-			       !NILP (Vdebug_on_error) ? Qnil : Qerror,
-			       read_process_output_error_handler);
 
   /* If we saved the match data nonrecursively, restore it now.  */
   restore_search_regs ();
@@ -6373,7 +6525,6 @@ Otherwise it discards the output.  */)
   (Lisp_Object proc, Lisp_Object text)
 {
   struct Lisp_Process *p;
-  ptrdiff_t opoint;
 
   CHECK_PROCESS (proc);
   p = XPROCESS (proc);
@@ -6384,31 +6535,10 @@ Otherwise it discards the output.  */)
       Lisp_Object old_read_only;
       ptrdiff_t old_begv, old_zv;
       ptrdiff_t before, before_byte;
-      ptrdiff_t opoint_byte;
-      struct buffer *b;
+      ptrdiff_t opoint, opoint_byte;
 
-      Fset_buffer (p->buffer);
-      opoint = PT;
-      opoint_byte = PT_BYTE;
-      old_read_only = BVAR (current_buffer, read_only);
-      old_begv = BEGV;
-      old_zv = ZV;
-
-      bset_read_only (current_buffer, Qnil);
-
-      /* Insert new output into buffer at the current end-of-output
-	 marker, thus preserving logical ordering of input and output.  */
-      if (XMARKER (p->mark)->buffer)
-	set_point_from_marker (p->mark);
-      else
-	SET_PT_BOTH (ZV, ZV_BYTE);
-      before = PT;
-      before_byte = PT_BYTE;
-
-      /* If the output marker is outside of the visible region, save
-	 the restriction and widen.  */
-      if (! (BEGV <= PT && PT <= ZV))
-	Fwiden ();
+      read_process_output_before_insert (p, &old_read_only, &old_begv, &old_zv,
+					 &before, &before_byte, &opoint, &opoint_byte);
 
       /* Adjust the multibyteness of TEXT to that of the buffer.  */
       if (NILP (BVAR (current_buffer, enable_multibyte_characters))
@@ -6421,35 +6551,8 @@ Otherwise it discards the output.  */)
       insert_from_string_before_markers (text, 0, 0,
 					 SCHARS (text), SBYTES (text), 0);
 
-      /* Make sure the process marker's position is valid when the
-	 process buffer is changed in the signal_after_change above.
-	 W3 is known to do that.  */
-      if (BUFFERP (p->buffer)
-	  && (b = XBUFFER (p->buffer), b != current_buffer))
-	set_marker_both (p->mark, p->buffer, BUF_PT (b), BUF_PT_BYTE (b));
-      else
-	set_marker_both (p->mark, p->buffer, PT, PT_BYTE);
-
-      update_mode_lines = 23;
-
-      /* Make sure opoint and the old restrictions
-	 float ahead of any new text just as point would.  */
-      if (opoint >= before)
-	{
-	  opoint += PT - before;
-	  opoint_byte += PT_BYTE - before_byte;
-	}
-      if (old_begv > before)
-	old_begv += PT - before;
-      if (old_zv >= before)
-	old_zv += PT - before;
-
-      /* If the restriction isn't what it should be, set it.  */
-      if (old_begv != BEGV || old_zv != ZV)
-	Fnarrow_to_region (make_fixnum (old_begv), make_fixnum (old_zv));
-
-      bset_read_only (current_buffer, old_read_only);
-      SET_PT_BOTH (opoint, opoint_byte);
+      read_process_output_after_insert (p, &old_read_only, old_begv, old_zv,
+					before, before_byte, opoint, opoint_byte);
     }
   return Qnil;
 }
@@ -8519,6 +8622,14 @@ init_process_emacs (int sockfd)
 
   inhibit_sentinels = 0;
 
+#ifdef HAVE_UNEXEC
+  /* Clear child_signal_read_fd and child_signal_write_fd after dumping,
+     lest wait_reading_process_output should select on nonexistent file
+     descriptors which existed in the build process.  */
+  child_signal_read_fd = -1;
+  child_signal_write_fd = -1;
+#endif /* HAVE_UNEXEC */
+
   if (!will_dump_with_unexec_p ())
     {
 #if defined HAVE_GLIB && !defined WINDOWSNT
@@ -8797,7 +8908,14 @@ amounts of data in one go.
 
 On GNU/Linux systems, the value should not exceed
 /proc/sys/fs/pipe-max-size.  See pipe(7) manpage for details.  */);
-  read_process_output_max = 4096;
+  read_process_output_max = 65536;
+
+  DEFVAR_BOOL ("fast-read-process-output", fast_read_process_output,
+	       doc: /* Non-nil to optimize the insertion of process output.
+We skip calling `internal-default-process-filter' and don't allocate
+the Lisp string that would be used as its argument.  Only affects the
+case of asynchronous process with the default filter.  */);
+  fast_read_process_output = true;
 
   DEFVAR_INT ("process-error-pause-time", process_error_pause_time,
 	      doc: /* The number of seconds to pause after handling process errors.

@@ -1,6 +1,6 @@
 /* Android initialization for GNU Emacs.
 
-Copyright (C) 2023-2024 Free Software Foundation, Inc.
+Copyright (C) 2023-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -304,7 +304,7 @@ static struct android_event_queue event_queue;
 /* Semaphores used to signal select completion and start.  */
 static sem_t android_pselect_sem, android_pselect_start_sem;
 
-#if __ANDROID_API__ < 16
+#if __ANDROID_API__ < 21
 
 /* Select self-pipe.  */
 static int select_pipe[2];
@@ -363,7 +363,7 @@ android_run_select_thread (void *data)
   JNI_STACK_ALIGNMENT_PROLOGUE;
 
   int rc;
-#if __ANDROID_API__ < 16
+#if __ANDROID_API__ < 21
   int nfds;
   fd_set readfds;
   char byte;
@@ -375,7 +375,7 @@ android_run_select_thread (void *data)
   /* Set the name of this thread's LWP for debugging purposes.  */
   android_set_task_name ("`android_select'");
 
-#if __ANDROID_API__ < 16
+#if __ANDROID_API__ < 21
   /* A completely different implementation is used when building for
      Android versions earlier than 16, because pselect with a signal
      mask does not work there.  Instead of blocking SIGUSR1 and
@@ -451,12 +451,12 @@ android_run_select_thread (void *data)
       sem_post (&android_pselect_sem);
     }
 #else
+  sigfillset (&signals);
   if (pthread_sigmask (SIG_BLOCK, &signals, NULL))
     __android_log_print (ANDROID_LOG_FATAL, __func__,
 			 "pthread_sigmask: %s",
 			 strerror (errno));
 
-  sigfillset (&signals);
   sigdelset (&signals, SIGUSR1);
   sigemptyset (&waitset);
   sigaddset (&waitset, SIGUSR1);
@@ -514,7 +514,7 @@ android_run_select_thread (void *data)
   return NULL;
 }
 
-#if __ANDROID_API__ >= 16
+#if __ANDROID_API__ >= 21
 
 static void
 android_handle_sigusr1 (int sig, siginfo_t *siginfo, void *arg)
@@ -569,7 +569,7 @@ android_init_events (void)
 
   main_thread_id = pthread_self ();
 
-#if __ANDROID_API__ >= 16
+#if __ANDROID_API__ >= 21
 
   /* Before starting the select thread, make sure the disposition for
      SIGUSR1 is correct.  */
@@ -762,7 +762,7 @@ android_select (int nfds, fd_set *readfds, fd_set *writefds,
 		fd_set *exceptfds, struct timespec *timeout)
 {
   int nfds_return;
-#if __ANDROID_API__ < 16
+#if __ANDROID_API__ < 21
   static char byte;
 #endif
 
@@ -818,7 +818,7 @@ android_select (int nfds, fd_set *readfds, fd_set *writefds,
   /* Start waiting for the event queue condition to be set.  */
   pthread_cond_wait (&event_queue.read_var, &event_queue.mutex);
 
-#if __ANDROID_API__ >= 16
+#if __ANDROID_API__ >= 21
   /* Interrupt the select thread now, in case it's still in
      pselect.  */
   pthread_kill (event_queue.select_thread, SIGUSR1);
@@ -1491,15 +1491,6 @@ NATIVE_NAME (setEmacsParams) (JNIEnv *env, jobject object,
        EmacsNoninteractive can be found.  */
     setenv ("EMACS_CLASS_PATH", android_class_path, 1);
 
-  /* Set LD_LIBRARY_PATH to an appropriate value.  */
-  setenv ("LD_LIBRARY_PATH", android_lib_dir, 1);
-
-  /* EMACS_LD_LIBRARY_PATH records the location of the app library
-     directory.  android-emacs refers to this, since users have valid
-     reasons for changing LD_LIBRARY_PATH to a value that precludes
-     the possibility of Java locating libemacs later.  */
-  setenv ("EMACS_LD_LIBRARY_PATH", android_lib_dir, 1);
-
   /* If the system is Android 5.0 or later, set LANG to en_US.utf8,
      which is understood by the C library.  In other instances set it
      to C, a meaningless value, for good measure.  */
@@ -2019,6 +2010,8 @@ NATIVE_NAME (initEmacs) (JNIEnv *env, jobject object, jarray argv,
       c_argument
 	= (*env)->GetStringUTFChars (env, (jstring) dump_file_object,
 				     NULL);
+      if (!c_argument)
+	emacs_abort ();
 
       /* Copy the Java string data once.  */
       dump_file = strdup (c_argument);
@@ -2537,6 +2530,11 @@ NATIVE_NAME (sendDndUri) (JNIEnv *env, jobject object,
 
   length = (*env)->GetStringLength (env, string);
   buffer = malloc (length * sizeof *buffer);
+
+  /* Out of memory.  */
+  if (!buffer)
+    return 0;
+
   characters = (*env)->GetStringChars (env, string, NULL);
 
   if (!characters)
@@ -2574,6 +2572,11 @@ NATIVE_NAME (sendDndText) (JNIEnv *env, jobject object,
 
   length = (*env)->GetStringLength (env, string);
   buffer = malloc (length * sizeof *buffer);
+
+  /* Out of memory.  */
+  if (!buffer)
+    return 0;
+
   characters = (*env)->GetStringChars (env, string, NULL);
 
   if (!characters)
@@ -5348,7 +5351,7 @@ android_wc_lookup_string (android_key_pressed_event *event,
       characters = (*env)->GetStringChars (env, string, NULL);
       android_exception_check_nonnull ((void *) characters, string);
 
-      /* Establish the size of the the string.  */
+      /* Establish the size of the string.  */
       size = (*env)->GetStringLength (env, string);
 
       /* Copy over the string data.  */
@@ -6497,18 +6500,18 @@ android_browse_url (Lisp_Object url, Lisp_Object send)
   buffer = (*android_java_env)->GetStringUTFChars (android_java_env,
 						   (jstring) value,
 						   NULL);
-  android_exception_check_1 (value);
+  android_exception_check_nonnull ((void *) buffer, value);
 
   /* Otherwise, build the string describing the error.  */
-  tem = build_string_from_utf8 (buffer);
+  tem = build_unibyte_string (buffer);
 
   (*android_java_env)->ReleaseStringUTFChars (android_java_env,
 					      (jstring) value,
 					      buffer);
 
-  /* And return it.  */
+  /* And decode and return the same.  */
   ANDROID_DELETE_LOCAL_REF (value);
-  return tem;
+  return code_convert_string_norecord (tem, Qandroid_jni, false);
 }
 
 /* Tell the system to restart Emacs in a short amount of time, and
@@ -6574,8 +6577,8 @@ android_query_battery (struct android_battery_state *status)
   status->charge_counter = longs[1];
   status->current_average = longs[2];
   status->current_now = longs[3];
-  status->remaining = longs[4];
-  status->status = longs[5];
+  status->status = longs[4];
+  status->remaining = longs[5];
   status->plugged = longs[6];
   status->temperature = longs[7];
 

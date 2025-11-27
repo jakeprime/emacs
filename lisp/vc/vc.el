@@ -1,6 +1,6 @@
 ;;; vc.el --- drive a version-control system from within Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1992-1998, 2000-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1992-1998, 2000-2025 Free Software Foundation, Inc.
 
 ;; Author: FSF (see below for full credits)
 ;; Maintainer: emacs-devel@gnu.org
@@ -1479,7 +1479,7 @@ itself responsible for the file (usually because other files in that
 directory are already registered under that backend) will be used to
 register the file.  If no backend declares itself responsible, the
 first backend that could register the file is used."
-  (interactive "P")
+  (interactive)
   (let* ((fileset-arg (or vc-fileset (vc-deduce-fileset nil t)))
          (backend (car fileset-arg))
 	 (files (nth 1 fileset-arg)))
@@ -1691,10 +1691,12 @@ Type \\[vc-next-action] to check in changes.")
       "Please explain why you stole the lock.  Type \\`C-c C-c' when done"))))
 
 (defun vc-checkin (files backend &optional comment initial-contents rev patch-string)
-  "Check in FILES. COMMENT is a comment string; if omitted, a
-buffer is popped up to accept a comment.  If INITIAL-CONTENTS is
-non-nil, then COMMENT is used as the initial contents of the log
-entry buffer.
+  "Check in FILES.
+
+COMMENT is a comment string; if omitted, a buffer is popped up to accept
+a comment.  If INITIAL-CONTENTS is non-nil, then COMMENT is used as the
+initial contents of the log entry buffer.
+
 The optional argument REV may be a string specifying the new revision
 level (only supported for some older VCSes, like RCS and CVS).
 The optional argument PATCH-STRING is a string to check in as a patch.

@@ -1,6 +1,6 @@
 ;;; elisp-mode.el --- Emacs Lisp mode  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985-1986, 1999-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1985-1986, 1999-2025 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: lisp, languages
@@ -335,9 +335,10 @@ mouse-1: Enable lexical-binding mode"
 		      mouse-face mode-line-highlight
                       local-map ,elisp--dynlex-modeline-map)))
   "Major mode for editing Lisp code to run in Emacs.
-Commands:
-Delete converts tabs to spaces as it moves back.
-Blank lines separate paragraphs.  Semicolons start comments.
+\\<emacs-lisp-mode-map>
+- \\[backward-delete-char-untabify] converts tabs to spaces as it moves back.
+- Blank lines separate paragraphs.
+- Semicolons start comments.
 
 When editing Lisp data (as opposed to code), `lisp-data-mode' can
 be used instead.
@@ -367,7 +368,7 @@ be used instead.
             #'elisp-completion-at-point nil 'local)
   (add-hook 'flymake-diagnostic-functions #'elisp-flymake-checkdoc nil t)
   (add-hook 'flymake-diagnostic-functions
-              #'elisp-flymake-byte-compile nil t)
+            #'elisp-flymake-byte-compile nil t)
   (add-hook 'context-menu-functions #'elisp-context-menu 10 t))
 
 ;; Font-locking support.
@@ -448,6 +449,35 @@ be used instead.
 This is used to try and avoid the most egregious problems linked to the
 use of `macroexpand-all' as a way to find the \"underlying raw code\".")
 
+(defvar elisp--macroexpand-untrusted-warning t)
+
+(defun elisp--safe-macroexpand-all (sexp)
+  (if (not (trusted-content-p))
+      ;; FIXME: We should try and do better here, either using a notion
+      ;; of "safe" macros, or with `bwrap', or ...
+      (progn
+        (when elisp--macroexpand-untrusted-warning
+          (setq-local elisp--macroexpand-untrusted-warning nil) ;Don't spam!
+          (let ((inhibit-message t))      ;Only log.
+            (message "Completion of local vars is disabled in %s (untrusted content)"
+                     (buffer-name))))
+        sexp)
+    (let ((macroexpand-advice
+           (lambda (expander form &rest args)
+             (condition-case err
+                 (apply expander form args)
+               (error
+                (message "Ignoring macroexpansion error: %S" err) form)))))
+      (unwind-protect
+          ;; Silence any macro expansion errors when
+          ;; attempting completion at point (bug#58148).
+          (let ((inhibit-message t)
+                (macroexp-inhibit-compiler-macros t)
+                (warning-minimum-log-level :emergency))
+            (advice-add 'macroexpand-1 :around macroexpand-advice)
+            (macroexpand-all sexp elisp--local-macroenv))
+        (advice-remove 'macroexpand-1 macroexpand-advice)))))
+
 (defun elisp--local-variables ()
   "Return a list of locally let-bound variables at point."
   (save-excursion
@@ -463,23 +493,8 @@ use of `macroexpand-all' as a way to find the \"underlying raw code\".")
                        (car (read-from-string
                              (concat txt "elisp--witness--lisp" closer)))
                      ((invalid-read-syntax end-of-file) nil)))
-             (macroexpand-advice
-              (lambda (expander form &rest args)
-                (condition-case err
-                    (apply expander form args)
-                  (error
-                   (message "Ignoring macroexpansion error: %S" err) form))))
-             (sexp
-              (unwind-protect
-                  ;; Silence any macro expansion errors when
-                  ;; attempting completion at point (bug#58148).
-                  (let ((inhibit-message t)
-                        (macroexp-inhibit-compiler-macros t)
-                        (warning-minimum-log-level :emergency))
-                    (advice-add 'macroexpand-1 :around macroexpand-advice)
-                    (macroexpand-all sexp elisp--local-macroenv))
-                (advice-remove 'macroexpand-1 macroexpand-advice)))
-             (vars (elisp--local-variables-1 nil sexp)))
+             (vars (elisp--local-variables-1
+                    nil (elisp--safe-macroexpand-all sexp))))
         (delq nil
               (mapcar (lambda (var)
                         (and (symbolp var)
@@ -1315,11 +1330,10 @@ Like Lisp mode except that \\[eval-print-last-sexp] evals the Lisp expression
 before point, and prints its value into the buffer, advancing point.
 Note that printing is controlled by `eval-expression-print-length'
 and `eval-expression-print-level'.
-
-Commands:
-Delete converts tabs to spaces as it moves back.
-Paragraphs are separated only by blank lines.
-Semicolons start comments.
+\\<lisp-interaction-mode-map>
+- \\[backward-delete-char-untabify] converts tabs to spaces as it moves back.
+- Paragraphs are separated only by blank lines.
+- Semicolons start comments.
 
 \\{lisp-interaction-mode-map}"
   :abbrev-table nil
@@ -1633,7 +1647,10 @@ integer value is also printed as a character of that codepoint.
 If `eval-expression-debug-on-error' is non-nil, which is the default,
 this command arranges for all errors to enter the debugger."
   (interactive "P")
-  (values--store-value
+  (funcall
+   ;; Not sure why commit 4428c27c1ae7d stored into `values' only when
+   ;; `eval-expression-debug-on-error' was nil, but let's preserve that.
+   (if eval-expression-debug-on-error #'identity #'values--store-value)
    (handler-bind ((error (if eval-expression-debug-on-error
                              #'eval-expression--debug #'ignore)))
      (elisp--eval-last-sexp eval-last-sexp-arg-internal))))
@@ -2185,6 +2202,14 @@ directory of the buffer being compiled, and nothing else.")
   "A Flymake backend for elisp byte compilation.
 Spawn an Emacs process that byte-compiles a file representing the
 current buffer state and calls REPORT-FN when done."
+  (unless (trusted-content-p)
+    ;; FIXME: Use `bwrap' and friends to compile untrusted content.
+    ;; FIXME: We emit a message *and* signal an error, because by default
+    ;; Flymake doesn't display the warning it puts into "*flmake log*".
+    (message "Disabling elisp-flymake-byte-compile in %s (untrusted content)"
+             (buffer-name))
+    (user-error "Disabling elisp-flymake-byte-compile in %s (untrusted content)"
+                (buffer-name)))
   (when elisp-flymake--byte-compile-process
     (when (process-live-p elisp-flymake--byte-compile-process)
       (kill-process elisp-flymake--byte-compile-process)))

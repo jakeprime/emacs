@@ -1,6 +1,6 @@
 ;;; jsonrpc.el --- JSON-RPC library                  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2018-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2018-2025 Free Software Foundation, Inc.
 
 ;; Author: João Távora <joaotavora@gmail.com>
 ;; Keywords: processes, languages, extensions
@@ -125,7 +125,7 @@ size of the log buffer (0 disables, nil means infinite).  The
                            t))
   (when e-b-s-s-supplied-p
     (warn
-     "`:events-buffer-scrollback-size' deprecated. Use `events-buffer-config'.")
+     "`:events-buffer-scrollback-size' deprecated.  Use `events-buffer-config'.")
     (with-slots ((plist -events-buffer-config)) c
       (setf plist (copy-sequence plist)
             plist (plist-put plist :size events-buffer-scrollback-size)))))
@@ -448,7 +448,7 @@ ignored."
               ;; ...finally, whatever may have happened to this sync
               ;; request, it might have been holding up any outer
               ;; "anxious" continuations.  The following ensures we
-              ;; cll them.
+              ;; call them.
               (jsonrpc--continue connection id)))))
     (when (eq 'error (car retval))
       (signal 'jsonrpc-error
@@ -466,8 +466,17 @@ ignored."
 (define-obsolete-variable-alias 'jrpc-default-request-timeout
   'jsonrpc-default-request-timeout "28.1")
 
-(defconst jsonrpc-default-request-timeout 10
-  "Time in seconds before timing out a JSONRPC request.")
+(defgroup jsonrpc nil
+  "JSON-RPC customization."
+  :prefix "jsonrpc-"
+  :group 'comm)
+
+(defcustom jsonrpc-default-request-timeout 10
+  "Time in seconds before timing out a JSON-RPC request without response."
+  :version "30.1"
+  :type 'number
+  :safe 'numberp
+  :group 'jsonrpc)
 
 
 ;;; Specific to `jsonrpc-process-connection'
@@ -825,7 +834,7 @@ Return the full continuation (ID SUCCESS-FN ERROR-FN TIMER)"
     (cond
      (anxious
       (when (not (= (car head) id)) ; sanity check
-        (error "internal error: please report this bug"))
+        (error "Internal error: please report this bug"))
       ;; If there are "anxious" `jsonrpc-request' continuations
       ;; that should already have been run, they should run now.
       ;; The main continuation -- if it exists -- should run

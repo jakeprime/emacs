@@ -1,6 +1,6 @@
 ;;; eww.el --- Emacs Web Wowser  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2013-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2013-2025 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: html
@@ -828,6 +828,12 @@ This replaces the region with the preprocessed HTML."
   (unless document
     (let ((dom (eww--parse-html-region (point) (point-max) charset)))
       (when (eww-default-readable-p url)
+        ;; HACK: Work around bug#77299.  By displaying the full
+        ;; document first, we can ensure that the `:title' property in
+        ;; `eww-data' gets set properly.  This is inefficient, since
+        ;; it requires rendering the document twice.
+        (let ((shr-inhibit-images t))
+          (eww-display-document (eww-document-base url dom) point buffer))
         (eww-score-readability dom)
         (setq dom (eww-highest-readability dom))
         (with-current-buffer buffer
@@ -1306,7 +1312,7 @@ This consults the entries in `eww-readable-urls' (which see)."
   "Check if point is within a field and toggle text conversion.
 Set `text-conversion-style' to the value `action' if it isn't
 already and point is within the prompt field, or if
-`text-conversion-style' is `nil', so as to guarantee that
+`text-conversion-style' is nil, so as to guarantee that
 the input method functions properly for the purpose of typing
 within text input fields."
   (when (and (eq major-mode 'eww-mode)
@@ -1371,12 +1377,16 @@ within text input fields."
       (goto-char (point-min))
       (while-let ((match (text-property-search-forward
                           'display nil (lambda (_ value) (imagep value)))))
-        (let ((image (prop-match-value match)))
-          (unless (image-property image :original-scale)
-            (setf (image-property image :original-scale)
-                  (or (image-property image :scale) 1)))
+        (let* ((image (prop-match-value match))
+               (original-scale (or (image-property image :original-scale)
+                                   (setf (image-property image :original-scale)
+                                         (or (image-property image :scale)
+                                             'default)))))
+          (when (eq original-scale 'default)
+            (setq original-scale (image-compute-scaling-factor
+                                  image-scaling-factor)))
           (setf (image-property image :scale)
-                (* (image-property image :original-scale) scaling)))))))
+                (* original-scale scaling)))))))
 
 (defun eww--url-at-point ()
   "`thing-at-point' provider function."
@@ -2086,7 +2096,7 @@ Interactively, EVENT is the value of `last-nonmenu-event'."
 
 (defun eww-browse-with-external-browser (&optional url)
   "Browse the current URL with an external browser.
-The browser to used is specified by the
+The browser to use is specified by the
 `browse-url-secondary-browser-function' variable."
   (interactive nil eww-mode)
   (funcall browse-url-secondary-browser-function
@@ -2158,8 +2168,16 @@ Differences in #targets are ignored."
   (kill-new (plist-get eww-data :url)))
 
 (defun eww-download ()
-  "Download URL to `eww-download-directory'.
-Use link at point if there is one, else the current page's URL."
+  "Download a Web page to `eww-download-directory'.
+Use link at point if there is one, else the current page's URL.
+This command downloads the page to the download directory, under
+a file name generated from the last portion of the page's URL,
+after the last slash.  (If URL ends in a slash, the page will be
+saved under the name \"!\".)
+If there's already a file by that name in the download directory,
+this command will modify the name to make it unique.
+The command shows in the echo-area the actual file name where the
+page was saved."
   (interactive nil eww-mode)
   (let ((dir (if (stringp eww-download-directory)
                  eww-download-directory
@@ -2463,7 +2481,7 @@ If ERROR-OUT, signal user-error if there are no bookmarks."
 
 (defun eww-save-history ()
   "Save the current page's data to the history.
-If the current page is a historial one loaded from
+If the current page is a historical one loaded from
 `eww-history' (e.g. by calling `eww-back-url'), this will update the
 page's entry in `eww-history' and return nil.  Otherwise, add a new
 entry to `eww-history' and return t."
@@ -2754,11 +2772,20 @@ Only the properties listed in `eww-desktop-data-save' are included.
 Generally, the list should not include the (usually overly large)
 :dom, :source and :text properties."
   (let ((history (mapcar #'eww-desktop-data-1
-                         (cons eww-data eww-history))))
-    (list :history (if eww-desktop-remove-duplicates
-                       (cl-remove-duplicates
-                        history :test #'eww-desktop-history-duplicate)
-                     history))))
+                         (cons eww-data eww-history)))
+        (posn eww-history-position) rval)
+    (list :history
+          (if eww-desktop-remove-duplicates
+              (prog1
+                  (setq
+                   rval (cl-remove-duplicates
+                         history :test #'eww-desktop-history-duplicate))
+                (setq posn
+                      (cl-position
+                       (elt history eww-history-position)
+                       rval :test #'eq)))
+            history)
+          :history-position posn)))
 
 (defun eww-restore-desktop (file-name buffer-name misc-data)
   "Restore an eww buffer from its desktop file record.
@@ -2772,7 +2799,8 @@ Otherwise, the restored buffer will contain a prompt to do so by using
     (setq eww-history       (cdr (plist-get misc-data :history))
 	  eww-data      (or (car (plist-get misc-data :history))
 			    ;; backwards compatibility
-			    (list :url (plist-get misc-data :uri))))
+			    (list :url (plist-get misc-data :uri)))
+          eww-history-position (plist-get misc-data :history-position))
     (unless file-name
       (when (plist-get eww-data :url)
 	(cl-case eww-restore-desktop
@@ -2784,8 +2812,6 @@ Otherwise, the restored buffer will contain a prompt to do so by using
     ;; .
     (current-buffer)))
 
-(add-to-list 'desktop-locals-to-save
-	     'eww-history-position)
 (add-to-list 'desktop-buffer-mode-handlers
              '(eww-mode . eww-restore-desktop))
 

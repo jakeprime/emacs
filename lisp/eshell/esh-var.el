@@ -1,6 +1,6 @@
 ;;; esh-var.el --- handling of variables  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2025 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 
@@ -436,11 +436,11 @@ the values of nil for each."
      :usage "[NAME=VALUE]... [COMMAND]...")
    (if args
        (or (eshell-parse-local-variables args)
-           (eshell-named-command (car args) (cdr args)))
-     (eshell-init-print-buffer)
-     (dolist (setting (sort (eshell-environment-variables) 'string-lessp))
-       (eshell-buffered-print setting "\n"))
-     (eshell-flush))))
+           (throw 'eshell-replace-command
+                  `(eshell-named-command ,(car args) ',(cdr args))))
+     (eshell-with-buffered-print
+       (dolist (setting (sort (eshell-environment-variables) 'string-lessp))
+         (eshell-buffered-print setting "\n"))))))
 
 (defun eshell-insert-envvar (envvar-name)
   "Insert ENVVAR-NAME into the current buffer at point."

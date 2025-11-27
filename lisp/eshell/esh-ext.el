@@ -1,6 +1,6 @@
 ;;; esh-ext.el --- commands external to Eshell  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2025 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 
@@ -171,6 +171,7 @@ These are commands with a full remote file name, such as
 commands on your local host by using the \"/local:\" prefix, like
 \"/local:whoami\"."
   :type 'boolean
+  :version "30.1"
   :group 'eshell-ext)
 
 ;;; Functions:
@@ -181,6 +182,11 @@ commands on your local host by using the \"/local:\" prefix, like
   "Initialize the external command handling code."
   (add-hook 'eshell-named-command-hook #'eshell-quoted-file-command nil t)
   (add-hook 'eshell-named-command-hook #'eshell-explicit-command nil t))
+
+(defun eshell-explicit-command--which (command)
+  (when (and (> (length command) 1)
+             (eq (aref command 0) eshell-explicit-command-char))
+    (eshell-external-command--which (substring command 1))))
 
 (defun eshell-explicit-command (command args)
   "If a command name begins with \"*\", always call it externally.
@@ -194,12 +200,22 @@ This bypasses all Lisp functions and aliases."
 	(error "%s: external command not found"
 	       (substring command 1))))))
 
+(put 'eshell-explicit-command 'eshell-which-function
+     #'eshell-explicit-command--which)
+
+(defun eshell-quoted-file-command--which (command)
+  (when (file-name-quoted-p command)
+    (eshell-external-command--which (file-name-unquote command))))
+
 (defun eshell-quoted-file-command (command args)
   "If a command name begins with \"/:\", always call it externally.
 Similar to `eshell-explicit-command', this bypasses all Lisp functions
 and aliases, but it also ignores file name handlers."
   (when (file-name-quoted-p command)
     (eshell-external-command (file-name-unquote command) args)))
+
+(put 'eshell-quoted-file-command 'eshell-which-function
+     #'eshell-quoted-file-command--which)
 
 (defun eshell-remote-command (command args)
   "Insert output from a remote COMMAND, using ARGS.
@@ -238,6 +254,11 @@ current working directory."
 	(apply (car interp) (append (cdr interp) args))
       (eshell-gather-process-output
        (car interp) (append (cdr interp) args)))))
+
+(defun eshell-external-command--which (command)
+  (or (eshell-search-path command)
+      (error "no %s in (%s)" command
+             (string-join (eshell-get-path t) (path-separator)))))
 
 (defun eshell-external-command (command args)
   "Insert output from an external COMMAND, using ARGS."
@@ -281,7 +302,17 @@ Return nil, or a list of the form:
   (INTERPRETER [ARGS] FILE)"
   (let ((maxlen eshell-command-interpreter-max-length))
     (if (and (file-readable-p file)
-	     (file-regular-p file))
+	     (file-regular-p file)
+             ;; If the file is zero bytes, it can't possibly have a
+             ;; shebang.  This check may seem redundant, but we can
+             ;; encounter files that Emacs considers both readable and
+             ;; regular, but which aren't *actually* readable.  This can
+             ;; happen, for example, with certain kinds of reparse
+             ;; points like APPEXECLINK on NTFS filesystems (MS-Windows
+             ;; uses these for "app execution aliases").  In these
+             ;; cases, the file size is 0, so this check protects us
+             ;; from errors.
+             (> (file-attribute-size (file-attributes file)) 0))
 	(with-temp-buffer
 	  (insert-file-contents-literally file nil 0 maxlen)
 	  (if (looking-at "#![ \t]*\\([^ \r\t\n]+\\)\\([ \t]+\\(.+\\)\\)?")

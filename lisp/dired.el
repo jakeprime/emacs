@@ -1,6 +1,6 @@
 ;;; dired.el --- directory-browsing commands -*- lexical-binding: t -*-
 
-;; Copyright (C) 1985-1986, 1992-1997, 2000-2024 Free Software
+;; Copyright (C) 1985-1986, 1992-1997, 2000-2025 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Sebastian Kremer <sk@thp.uni-koeln.de>
@@ -36,6 +36,7 @@
 
 (eval-when-compile (require 'subr-x))
 (eval-when-compile (require 'cl-lib))
+(eval-when-compile (require 'autorevert))
 ;; When bootstrapping dired-loaddefs has not been generated.
 (require 'dired-loaddefs nil t)
 (require 'dnd)
@@ -349,7 +350,7 @@ with the buffer narrowed to the listing."
 ;; functions probably depend on the dired-subdir-alist to be OK.
 
 (defcustom dired-make-directory-clickable t
-  "When non-nil, make the directory at the start of the dired buffer clickable."
+  "When non-nil, make the directory at the start of the Dired buffer clickable."
   :version "29.1"
   :group 'dired
   :type 'boolean)
@@ -510,10 +511,15 @@ Possible non-nil values:
  * `cycle':   when moving from the last/first visible line, cycle back
               to the first/last visible line.
  * `bounded': don't move up/down if the current line is the
-              first/last visible line."
+              first/last visible line.
+ * `cycle-files': like `cycle' but moves only over file lines.
+ * `bounded-files': like `bounded' but moves only over file lines.
+Any other non-nil value is treated as `bounded'."
   :type '(choice (const :tag "Move to any line" nil)
                  (const :tag "Cycle through non-empty lines" cycle)
-                 (const :tag "Stop on last/first non-empty line" bounded))
+                 (const :tag "Cycle through file lines" cycle-files)
+                 (const :tag "Stop on last/first non-empty line" bounded)
+                 (const :tag "Stop on last/first file line" bounded-files))
   :group 'dired
   :version "30.1")
 
@@ -925,34 +931,35 @@ Return value is the number of files marked, or nil if none were marked."
 (defmacro dired-map-over-marks (body arg &optional show-progress
 				     distinguish-one-marked)
   "Eval BODY with point on each marked line.  Return a list of BODY's results.
-If no marked file could be found, execute BODY on the current
-line.  ARG, if non-nil, specifies the files to use instead of the
+If no marked file could be found and ARG is nil, execute BODY on the current
+line.  If ARG is non-nil, it specifies the files to use instead of the
 marked files.
 
-If ARG is an integer, use the next ARG (or previous -ARG, if
-ARG<0) files.  In that case, point is dragged along.  This is so
-that commands on the next ARG (instead of the marked) files can
-be chained easily.
-For any other non-nil value of ARG, use the current file.
-
-If ARG is `marked', don't return the current file if nothing else
-is marked.
+  If ARG is an integer, use the next ARG (or previous -ARG, if ARG<0)
+  files.  In that case, point is dragged along.  This is so that
+  commands on the next ARG (instead of the marked) files can be
+  chained easily.
+  If ARG is the symbol `marked', use only marked files; if none are
+  marked, don't eval BODY and return nil.
+  For any other non-nil value of ARG, use the current file.
 
 If optional third arg SHOW-PROGRESS evaluates to non-nil,
-redisplay the dired buffer after each file is processed.
+redisplay the Dired buffer after each file is processed.
 
 No guarantee is made about the position on the marked line.
 BODY must ensure this itself if it depends on this.
 
 Search starts at the beginning of the buffer, thus the car of the
-list corresponds to the line nearest to the buffer's bottom.
+returnede list corresponds to the line nearest to the buffer's bottom.
 This is also true for (positive and negative) integer values of
 ARG.
 
 BODY should not be too long as it is expanded four times.
 
 If DISTINGUISH-ONE-MARKED is non-nil, then if we find just one
-marked file, return (t FILENAME) instead of (FILENAME)."
+marked file, return (t BODY-RESULT) instead of (BODY-RESULT),
+where BODY-RESULT is the result of evaluating BODY with point
+on the single marked file's line."
   ;;
   ;;Warning: BODY must not add new lines before point - this may cause an
   ;;endless loop.
@@ -1003,18 +1010,21 @@ marked file, return (t FILENAME) instead of (FILENAME)."
 
 (defun dired-get-marked-files (&optional localp arg filter distinguish-one-marked error)
   "Return the marked files' names as list of strings.
-The list is in the same order as the buffer, that is, the car is the
-  first marked file.
+The list is in the same order as the Dired buffer text, that is, the car
+  is the first marked file.
 Values returned are normally absolute file names.
-Optional arg LOCALP as in `dired-get-filename'.
+Optional arg LOCALP is as in `dired-get-filename'.
 Optional second argument ARG, if non-nil, specifies files near
- point instead of marked files.  It usually comes from the prefix
- argument.
-  If ARG is an integer, use the next ARG files.
+ point to return instead of marked files.  It usually comes from the
+ prefix argument of the caller.
+  If ARG is an integer, return the next ARG files (previous if ARG is
+   negative).
+  If ARG is the symbol `marked', return only marked files; return nil
+   if none are marked
   If ARG is any other non-nil value, return the current file name.
   If no files are marked, and ARG is nil, also return the current file name.
 Optional third argument FILTER, if non-nil, is a function to select
-  some of the files--those for which (funcall FILTER FILENAME) is non-nil.
+ some of the files--those for which (funcall FILTER FILENAME) is non-nil.
 
 If DISTINGUISH-ONE-MARKED is non-nil, then if we find just one marked file,
 return (t FILENAME) instead of (FILENAME).
@@ -1143,7 +1153,7 @@ ERROR can be a string with the error message."
 ;;                             nil default-directory nil))))))))
 
 (defun dired-file-name-at-point ()
-  "Try to get a file name at point in the current dired buffer.
+  "Try to get a file name at point in the current Dired buffer.
 This hook is intended to be put in `file-name-at-point-functions'.
 Note that it returns an abbreviated name that can't be used
 as an argument to `dired-goto-file'."
@@ -1710,9 +1720,10 @@ see `dired-use-ls-dired' for more details.")
       (cond ((and dir-wildcard (files--use-insert-directory-program-p))
              (setq switches (concat "-d " switches))
              (let* ((default-directory (car dir-wildcard))
+                    (ls (or (and remotep "ls")
+                            insert-directory-program))
                     (script (format "%s %s %s"
-                                    insert-directory-program
-                                    switches (cdr dir-wildcard)))
+                                    ls switches (cdr dir-wildcard)))
                     (sh (or (and remotep "/bin/sh")
                             (executable-find shell-file-name)
                             (executable-find "sh")))
@@ -1859,8 +1870,8 @@ see `dired-use-ls-dired' for more details.")
 
 (defun dired-mouse-drag (event)
   "Begin a drag-and-drop operation for the file at EVENT.
-If there are marked files and that file is marked, drag every
-other marked file as well.  Otherwise, unmark all files."
+If there are marked files and the file at EVENT is marked, drag all the
+other marked files as well.  Otherwise, unmark all files."
   (interactive "e" dired-mode)
   (when mark-active
     (deactivate-mark))
@@ -1896,19 +1907,24 @@ other marked file as well.  Otherwise, unmark all files."
               ;; We can get an error if there's by some chance no file
               ;; name at point.
               (condition-case error
-                  (let ((filename (with-selected-window (posn-window
-                                                         (event-end event))
-                                    (let ((marked-files (dired-map-over-marks (dired-get-filename
-                                                                               nil 'no-error-if-not-filep)
-                                                                              'marked))
-                                          (file-name (dired-get-filename nil 'no-error-if-not-filep)))
-                                      (if (and marked-files
-                                               (member file-name marked-files))
-                                          marked-files
-                                        (when marked-files
-                                          (dired-map-over-marks (dired-unmark nil)
-                                                                'marked))
-                                        file-name)))))
+                  (let ((filename
+                         (with-selected-window (posn-window
+                                                (event-end event))
+                           (let ((marked-files
+                                  (dired-map-over-marks (dired-get-filename
+                                                         nil
+                                                         'no-error-if-not-filep)
+                                                        'marked))
+                                 (file-name
+                                  (dired-get-filename nil
+                                                      'no-error-if-not-filep)))
+                             (if (and marked-files
+                                      (member file-name marked-files))
+                                 marked-files
+                               (when marked-files
+                                 (dired-map-over-marks (dired-unmark nil)
+                                                       'marked))
+                               file-name)))))
                     (when filename
                       (if (and (consp filename)
                                (cdr filename))
@@ -2130,7 +2146,7 @@ BUFFER-POSITION is the point position in the current Dired buffer.
 It has the form (BUFFER DIRED-FILENAME BUFFER-LINE-NUMBER).
 
 WINDOW-POSITIONS are current positions in all windows displaying
-this dired buffer.  The window positions have the form (WINDOW
+this Dired buffer.  The window positions have the form (WINDOW
 DIRED-FILENAME WINDOW-LINE-NUMBER).
 
 We store line numbers instead of point positions because the header
@@ -2874,7 +2890,7 @@ is controlled by `dired-movement-style'."
         ;; but it still wants to move farther.
         (cond
          ;; `cycle': go to the other end.
-         ((eq dired-movement-style 'cycle)
+         ((memq dired-movement-style '(cycle cycle-files))
           ;; Argument not changing on the second wrap
           ;; means infinite loop with no files found.
           (if (and wrapped (eq old-arg arg))
@@ -2884,16 +2900,24 @@ is controlled by `dired-movement-style'."
                          (point-max))))
           (setq wrapped t))
          ;; `bounded': go back to the last non-empty line.
-         ((eq dired-movement-style 'bounded)
-          (while (and (dired-between-files) (not (zerop arg)))
+         (dired-movement-style ; Either 'bounded or anything else non-nil.
+          (while (and (dired-between-files)
+                      (or (eq dired-movement-style 'bounded-files)
+                          (not (dired-get-subdir)))
+                      (not (zerop arg)))
             (funcall jumpfun (- moving-down))
             ;; Point not moving means infinite loop.
             (if (= old-position (point))
                 (setq arg 0)
               (setq old-position (point))))
           ;; Encountered a boundary, so let's stop movement.
-          (setq arg (if (dired-between-files) 0 moving-down)))))
-      (unless (dired-between-files)
+          (setq arg (if (and (dired-between-files)
+                             (or (eq dired-movement-style 'bounded-files)
+                                 (not (dired-get-subdir))))
+                        0 moving-down)))))
+      (unless (and (dired-between-files)
+                   (or (memq dired-movement-style '(cycle-files bounded-files))
+                       (not (dired-get-subdir))))
         ;; Has moved to a non-empty line.  This movement does
         ;; make sense.
         (cl-decf arg moving-down))
@@ -3462,7 +3486,7 @@ You can then feed the file name(s) to other commands with \\[yank]."
 If FILE is non-nil, include only those whose wildcard pattern (if any)
 matches FILE.
 The list is in reverse order of buffer creation, most recent last.
-As a side effect, killed dired buffers for DIR are removed from
+As a side effect, killed Dired buffers for DIR are removed from
 `dired-buffers'."
   (setq dir (file-name-as-directory (expand-file-name dir)))
   (let (result buf)
@@ -3489,7 +3513,7 @@ As a side effect, killed dired buffers for DIR are removed from
 
 (defun dired-buffers-for-dir-or-subdir (dir)
   "Return a list of buffers for DIR or a subdirectory thereof.
-As a side effect, killed dired buffers for DIR are removed from
+As a side effect, killed Dired buffers for DIR are removed from
 `dired-buffers'."
   (setq dir (file-name-as-directory dir))
   (let (result buf)
@@ -3965,7 +3989,10 @@ non-empty directories is allowed."
 (defun dired-do-delete (&optional arg)
   "Delete all marked (or next ARG) files.
 `dired-recursive-deletes' controls whether deletion of
-non-empty directories is allowed."
+non-empty directories is allowed.
+
+When called from Lisp, if ARG is the symbol `marked', delete
+only the marked files, or none if no files are marked."
   ;; This is more consistent with the file marking feature than
   ;; dired-do-flagged-delete.
   (interactive "P" dired-mode)
@@ -4014,7 +4041,11 @@ non-empty directories is allowed."
               (dired-move-to-filename)
 	      (let ((inhibit-read-only t))
 		(condition-case err
-		    (let ((fn (car (car l))))
+		    (let ((fn (car (car l)))
+                          ;; Temporarily prevent auto-revert while
+                          ;; deleting entry in the dired buffer
+                          ;; (bug#71264).
+                          (auto-revert-mode nil))
 		      (dired-delete-file fn dired-recursive-deletes trash)
 		      ;; if we get here, removing worked
 		      (setq succ (1+ succ))
@@ -4042,7 +4073,7 @@ non-empty directories is allowed."
   (dired-move-to-filename))
 
 (defun dired-fun-in-all-buffers (directory file fun &rest args)
-  "In all buffers dired'ing DIRECTORY, run FUN with ARGS.
+  "In all buffers Dired'ing DIRECTORY, run FUN with ARGS.
 If the buffer has a wildcard pattern, check that it matches FILE.
 \(FILE does not include a directory component.)
 FILE may be nil, in which case ignore it.
@@ -4057,7 +4088,7 @@ Return list of buffers where FUN succeeded (i.e., returned non-nil)."
 
 ;; Delete the entry for FILE from
 (defun dired-remove-entry (file)
-  "Remove entry FILE in the current dired buffer.
+  "Remove entry FILE in the current Dired buffer.
 Note this doesn't delete FILE in the file system.
 See `dired-delete-file' in case you wish that."
   (save-excursion
@@ -4067,7 +4098,7 @@ See `dired-delete-file' in case you wish that."
 			  (line-beginning-position 2))))))
 
 (defun dired-delete-entry (file)
-  "Remove entry FILE in the current dired buffer.
+  "Remove entry FILE in the current Dired buffer.
 Like `dired-remove-entry' followed by `dired-clean-up-after-deletion'.
 Note this doesn't delete FILE in the file system.
 See `dired-delete-file' in case you wish that."
@@ -5132,7 +5163,7 @@ move to that file's line in the directory listing.
 If the current buffer isn't visiting a file, Dired `default-directory'.
 
 If in Dired already, pop up a level and goto old directory's line.
-In case the proper Dired file line cannot be found, refresh the dired
+In case the proper Dired file line cannot be found, refresh the Dired
 buffer and try again.
 
 When OTHER-WINDOW is non-nil, jump to Dired buffer in other window.
@@ -5176,7 +5207,7 @@ Interactively with prefix argument, read FILE-NAME."
                   (dired-goto-file file))
                 ;; Toggle omitting, if it is on, and try again.
                 (when (bound-and-true-p dired-omit-mode)
-                  (dired-omit-mode)
+                  (dired-omit-mode -1)
                   (dired-goto-file file)))))))))
 
 ;;;###autoload

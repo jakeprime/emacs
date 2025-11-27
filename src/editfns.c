@@ -1,6 +1,6 @@
 /* Lisp functions pertaining to editing.                 -*- coding: utf-8 -*-
 
-Copyright (C) 1985-2024 Free Software Foundation, Inc.
+Copyright (C) 1985-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -1364,8 +1364,8 @@ to unibyte for insertion (see `string-make-unibyte').
 
 When operating on binary data, it may be necessary to preserve the
 original bytes of a unibyte string when inserting it into a multibyte
-buffer; to accomplish this, apply `string-as-multibyte' to the string
-and insert the result.
+buffer; to accomplish this, apply `decode-coding-string' with the
+`no-conversion' coding system to the string and insert the result.
 
 usage: (insert &rest ARGS)  */)
   (ptrdiff_t nargs, Lisp_Object *args)
@@ -1440,8 +1440,9 @@ DEFUN ("insert-char", Finsert_char, Sinsert_char, 1, 3,
               (prefix-numeric-value current-prefix-arg)\
               t))",
        doc: /* Insert COUNT copies of CHARACTER.
+
 Interactively, prompt for CHARACTER using `read-char-by-name'.
-You can specify CHARACTER in one of these ways:
+You can specify CHARACTER at the prompt in one of these ways:
 
  - As its Unicode character name, e.g. \"LATIN SMALL LETTER A\".
    Completion is available; if you type a substring of the name
@@ -1455,14 +1456,18 @@ You can specify CHARACTER in one of these ways:
  - As a code point with a radix specified with #, e.g. #o21430
    (octal), #x2318 (hex), or #10r8984 (decimal).
 
-If called interactively, COUNT is given by the prefix argument.  If
-omitted or nil, it defaults to 1.
+When called from Lisp, CHARACTER should be an integer whose value
+is valid for a character; see `characterp'.  To specify a character by
+its Unicode name in calls from Lisp, use `char-from-name'.
+
+When called interactively, COUNT is the prefix argument.  If omitted or
+nil, it defaults to 1.
 
 Inserting the character(s) relocates point and before-insertion
 markers in the same ways as the function `insert'.
 
 The optional third argument INHERIT, if non-nil, says to inherit text
-properties from adjoining text, if those properties are sticky.  If
+properties from adjoining text, if those properties are sticky.  When
 called interactively, INHERIT is t.  */)
   (Lisp_Object character, Lisp_Object count, Lisp_Object inherit)
 {
@@ -3158,6 +3163,9 @@ Return the message.
 
 In batch mode, the message is printed to the standard error stream,
 followed by a newline.
+
+If the variable `inhibit-message' is non-nil, the message is not
+displayed, only logged in the `*Messages*' buffer.
 
 The first argument is a format control string, and the rest are data
 to be formatted under control of the string.  Percent sign (%), grave

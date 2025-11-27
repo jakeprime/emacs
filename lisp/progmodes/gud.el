@@ -1,6 +1,6 @@
 ;;; gud.el --- Grand Unified Debugger mode for running GDB and other debuggers  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1992-1996, 1998, 2000-2024 Free Software Foundation,
+;; Copyright (C) 1992-1996, 1998, 2000-2025 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Eric S. Raymond <esr@thyrsus.com>
@@ -3959,7 +3959,7 @@ so they have been disabled."))
 deb = lldb.debugger
 inst = deb.GetInstanceName()
 ff = deb.GetInternalVariableValue('frame-format', inst).GetStringAtIndex(0)
-ff = ff[:-1] + '!gud ${line.number}:${line.column}:${line.file.fullpath}\\\\n\"'
+ff = ff[:-1] + '!gud ${line.number}:{${line.column}}:${line.file.fullpath}\\\\n\"'
 _ = deb.SetInternalVariable('frame-format', ff, inst)
 def gud_complete(s, max):
     interpreter = lldb.debugger.GetCommandInterpreter()

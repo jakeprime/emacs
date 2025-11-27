@@ -1,6 +1,6 @@
 ;;; string-edit.el --- editing long strings  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2022-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2022-2025 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 
@@ -58,7 +58,8 @@ Also see `read-string-from-buffer'."
                              (list 'intangible t
                                    'face 'string-edit-prompt
                                    'read-only t))
-        (insert (propertize (make-separator-line) 'rear-nonsticky t))
+        (insert (propertize (make-separator-line)
+                            'read-only t 'rear-nonsticky t))
         (add-text-properties (point-min) (point)
                              (list 'string-edit--prompt t))))
     (let ((start (point)))
@@ -75,8 +76,7 @@ Also see `read-string-from-buffer'."
     (setq buffer-undo-list nil)
     (string-edit-mode)
     (setq-local string-edit--success-callback success-callback)
-    (when abort-callback
-      (setq-local string-edit--abort-callback abort-callback))
+    (setq-local string-edit--abort-callback abort-callback)
     (setq-local header-line-format
                 (substitute-command-keys
                  "Type \\<string-edit-mode-map>\\[string-edit-done] when you've finished editing or \\[string-edit-abort] to abort"))
@@ -91,6 +91,9 @@ The user finishes editing with \\<string-edit-mode-map>\\[string-edit-done], or 
 PROMPT will be inserted at the start of the buffer, but won't be
 included in the resulting string.  If nil, no prompt will be
 inserted in the buffer.
+
+When the user exits recursive edit, this function returns the
+edited STRING.
 
 Also see `string-edit'."
   (string-edit

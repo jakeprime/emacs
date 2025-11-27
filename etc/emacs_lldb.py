@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2024 Free Software Foundation, Inc.
+# Copyright (C) 2022-2025 Free Software Foundation, Inc.
 #
 # This file is part of GNU Emacs.
 #
@@ -69,12 +69,15 @@ class Lisp_Object:
         "PVEC_MODULE_FUNCTION": "struct Lisp_Module_Function",
         "PVEC_NATIVE_COMP_UNIT": "struct Lisp_Native_Comp_Unit",
         "PVEC_SQLITE": "struct Lisp_Sqlite",
-        "PVEC_COMPILED": "struct Lisp_Vector",
+        "PVEC_CLOSURE": "struct Lisp_Vector",
         "PVEC_CHAR_TABLE": "struct Lisp_Vector",
         "PVEC_SUB_CHAR_TABLE": "void",
         "PVEC_RECORD": "struct Lisp_Vector",
         "PVEC_FONT": "struct font",
-        "PVEC_NORMAL_VECTOR": "struct Lisp_Vector"
+        "PVEC_NORMAL_VECTOR": "struct Lisp_Vector",
+        "PVEC_TS_NODE": "struct Lisp_TS_Node",
+        "PVEC_TS_PARSER": "struct Lisp_TS_Parser",
+        "PVEC_TS_COMPILED_QUERY": "struct Lisp_TS_Query",
     }
 
     # Object construction/initialization.

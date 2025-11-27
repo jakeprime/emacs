@@ -1,5 +1,5 @@
 @c This is part of the Emacs manual., Abbrevs, This is part of the Emacs manual., Top
-@c Copyright (C) 1985--1987, 1993--1995, 1997, 1999--2024 Free Software
+@c Copyright (C) 1985--1987, 1993--1995, 1997, 1999--2025 Free Software
 @c Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @node Maintaining
@@ -1038,6 +1038,10 @@ Display the change history for the current fileset
 Display the change history for the current repository
 (@code{vc-print-root-log}).
 
+@item C-u 1 C-x v L @var{revision} @key{RET}
+Display the log entry and changes (diffs) of a single @var{revision}
+(@code{vc-print-root-log}).
+
 @item C-x v b l
 Display the change history for another branch
 (@code{vc-print-branch-log}).
@@ -1065,10 +1069,10 @@ Search the change history for a specified pattern.
 current fileset in the long form, including who made the changes, the
 dates, and the log entry for each change (these are the same log
 entries you would enter via the @file{*vc-log*} buffer; @pxref{Log
-Buffer}).  When invoked from a buffer visiting a file, the current
+Buffer}).  If invoked from a buffer visiting a file, the current
 fileset consists of that single file, and point in the displayed
 @file{*vc-change-log*} buffer is centered at the revision of that
-file.  When invoked from a VC Directory buffer (@pxref{VC Directory
+file.  If invoked from a VC Directory buffer (@pxref{VC Directory
 Mode}) or from a Dired buffer (@pxref{Dired}), the fileset consists of
 all the marked files, defaulting to the file shown on the current line
 in the directory buffer if no file is marked.
@@ -1091,7 +1095,8 @@ version-controlled directory tree (RCS, SCCS, CVS, and SRC do not
 support this feature).  With a prefix argument, the command prompts
 for the maximum number of revisions to display.  A numeric prefix
 argument specifies the maximum number of revisions without prompting.
-When the numeric prefix argument is 1, as in @w{@kbd{C-1 C-x v L}} or
+
+  If the numeric prefix argument is 1, as in @w{@kbd{C-1 C-x v L}} or
 @w{@kbd{C-u 1 C-x v L}}, the command prompts for the revision ID, and
 displays the log entry of that revision together with the changes
 (diffs) it introduced.  (Some less capable version control systems,
@@ -1824,7 +1829,7 @@ the current project.
 @item C-x p r
 Perform query-replace for a regexp in all files that belong to the
 current project (@code{project-query-replace-regexp}).
-@item C-x p d
+@item C-x p D
 Run Dired in the current project's root directory
 (@code{project-dired}).
 @item C-x p v
@@ -1845,6 +1850,9 @@ Run shell command in the current project's root directory
 @item C-x p &
 Run shell command asynchronously in the current project's root
 directory (@code{project-async-shell-command}).
+@item C-x p o
+Run the next command in the current project
+(@code{project-any-command}).
 @end table
 
   Emacs provides commands for handling project files conveniently.
@@ -1941,6 +1949,11 @@ directory.  @xref{Top,Eshell,Eshell, eshell, Eshell: The Emacs Shell}.
   The command @kbd{C-x p &} (@code{project-async-shell-command}) runs
 @code{async-shell-command} in the current project's root directory.
 
+@findex project-any-command
+  Finally, the command @kbd{C-x p o} (@code{project-any-command}) will
+run the next command you type, whether related to files or not, in the
+current project.
+
 @node Project Buffer Commands
 @subsection Project Commands That Operate on Buffers
 
@@ -1953,6 +1966,9 @@ List the project buffers (@code{project-list-buffers}).
 @item C-x p k
 Kill all live buffers that belong to the current project
 (@code{project-kill-buffers}).
+@item C-x p o
+Run the next command in the current project
+(@code{project-any-command}).
 @end table
 
 @findex project-switch-to-buffer
@@ -1980,6 +1996,10 @@ accomplishes that: it kills all the buffers that belong to the current
 project that satisfy any of @code{project-kill-buffer-conditions}.  If
 @code{project-kill-buffers-display-buffer-list} is non-@code{nil}, the
 buffers to be killed will be displayed first.
+
+  Finally, the command @kbd{C-x p o} (@code{project-any-command}) will
+run the next command you type, whether related to buffers or not, in the
+current project.
 
 @node Switching Projects
 @subsection Switching Projects
@@ -2164,7 +2184,7 @@ between them.
 end of the change log file.  Here is an example:
 
 @smallexample
-Copyright 1997, 1998 Free Software Foundation, Inc.
+Copyright 1997--1998, 2025 Free Software Foundation, Inc.
 Copying and distribution of this file, with or without modification, are
 permitted provided the copyright notice and this notice are preserved.
 @end smallexample
@@ -2219,6 +2239,7 @@ definitions of symbols.  (One disadvantage of this kind of backend is
 that it only knows about subunits that were loaded into the
 interpreter.)
 
+@cindex eglot, for finding definitions of identifiers
 @item
 If Eglot is activated for the current buffer's project
 (@pxref{Projects}) and the current buffer's major mode, Eglot consults
@@ -2461,10 +2482,10 @@ the match with @var{replacement}.  This command can only be used in
 @file{*xref*} buffers that show all the matches for an identifier in
 all the relevant files.  @xref{Identifier Search}.
 
+@cindex revert-buffer, in @file{*xref*} buffers
 @item g
-@findex xref-revert-buffer
-Refresh the contents of the @file{*xref*} buffer
-(@code{xref-revert-buffer}).
+Refresh the contents of the @file{*xref*} buffer (@code{revert-buffer}).
+@xref{Reverting}.
 
 @item M-,
 @findex xref-quit-and-pop-marker-stack
@@ -2644,14 +2665,13 @@ loaded, this command can use it to generate completion candidates.
 @xref{Symbol Completion}.
 
 @findex list-tags
-  @kbd{M-x list-tags} reads the name of one of the files covered by
-the selected tags table, and displays a list of tags defined in that
-file.  Do not include a directory as part of the file name unless the
-file name recorded in the tags table includes a directory.  This
-command works only with the etags backend, and requires a tags table
-for the project to be available.  @xref{Tags Tables}.  If used
-interactively, the default tag is file name of the current buffer if
-used interactively.
+  @kbd{M-x list-tags} reads the name of one of the files covered by the
+selected tags table, with completion, and displays the list of tags
+defined in that file; it offers the current buffer's file name as the
+default file whose tags to list.  Do not include a directory as part of
+the file name unless the file name recorded in the tags table includes a
+directory.  This command works only with the etags backend, and requires
+a tags table for the project to be available.  @xref{Tags Tables}.
 
 @findex tags-next-file
   @kbd{M-x tags-next-file} visits files covered by the selected tags table.
@@ -3075,7 +3095,12 @@ and all the C character escape sequences are supported: @samp{\a} for
 bell, @samp{\b} for back space, @samp{\e} for escape, @samp{\f} for
 formfeed, @samp{\n} for newline, @samp{\r} for carriage return,
 @samp{\t} for tab, and @samp{\v} for vertical tab.  In addition,
-@samp{\d} stands for the @code{DEL} character.
+@samp{\d} stands for the @code{DEL} character.  Otherwise,
+the regular expression syntax is the same as Emacs
+except that backslash escapes are the same
+as GNU grep (which means, for example, that shy groups are not supported),
+and @samp{[:ascii:]}, @samp{[:multibyte:]}, @samp{[:nonascii:]},
+@samp{[:word:]}, and @samp{[:unibyte:]} are not supported.
 
   Ideally, @var{tagregexp} should not match more characters than are
 needed to recognize what you want to tag.  If the syntax requires you

@@ -1,6 +1,6 @@
 ;;; abbrev.el --- abbrev mode commands for Emacs -*- lexical-binding: t -*-
 
-;; Copyright (C) 1985-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1985-2025 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: abbrev convenience
@@ -289,7 +289,8 @@ abbrevs have been saved."
 The saved abbrevs are written to the file specified by
 `abbrev-file-name'."
   (interactive nil edit-abbrevs-mode)
-  (abbrev-edit-save-to-file abbrev-file-name))
+  (abbrev-edit-save-to-file abbrev-file-name)
+  (setq abbrevs-changed nil))
 
 
 (defun add-mode-abbrev (arg)

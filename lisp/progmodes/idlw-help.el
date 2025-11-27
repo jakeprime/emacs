@@ -1,6 +1,6 @@
 ;;; idlw-help.el --- HTML Help code for IDLWAVE  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2000-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2025 Free Software Foundation, Inc.
 ;;
 ;; Authors: JD Smith <jd.smith@utoledo.edu>
 ;;          Carsten Dominik <dominik@science.uva.nl>
@@ -62,8 +62,8 @@ is used in preference to the old `idlwave-html-help-location'."
    (if (memq system-type '(ms-dos windows-nt))
       nil
     "/usr/local/etc/")
-  "The directory where the idl_html_help/ dir lives.  Obsolete for IDL
-6.2 or later (see `idlwave-html-system-help-location')."
+  "The directory where the idl_html_help/ dir lives.
+Obsolete for IDL 6.2 or later (see `idlwave-html-system-help-location')."
   :type 'directory)
 
 (defcustom idlwave-help-use-assistant t

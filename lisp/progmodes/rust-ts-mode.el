@@ -1,6 +1,6 @@
 ;;; rust-ts-mode.el --- tree-sitter support for Rust  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2022-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2022-2025 Free Software Foundation, Inc.
 
 ;; Author     : Randy Taylor <dev@rjt.dev>
 ;; Maintainer : Randy Taylor <dev@rjt.dev>
@@ -427,7 +427,7 @@ delimiters < and >'s."
                             (?> '(5 . ?<))))))))
 
 (defun rust-ts-mode--prettify-symbols-compose-p (start end match)
-  "Return true iff the symbol MATCH should be composed.
+  "Return non-nil if the symbol MATCH should be composed.
 See `prettify-symbols-compose-predicate'."
   (and (fboundp 'prettify-symbols-default-compose-p)
        (prettify-symbols-default-compose-p start end match)

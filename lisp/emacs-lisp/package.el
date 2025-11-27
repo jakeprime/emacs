@@ -1,6 +1,6 @@
 ;;; package.el --- Simple package system for Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2007-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2025 Free Software Foundation, Inc.
 
 ;; Author: Tom Tromey <tromey@redhat.com>
 ;;         Daniel Hackney <dan@haxney.org>
@@ -1174,6 +1174,7 @@ boundaries."
   (let ((file-name (match-string-no-properties 1))
         (desc      (match-string-no-properties 2))
         (start     (line-beginning-position)))
+    (require 'lisp-mnt)
     ;; This warning was added in Emacs 27.1, and should be removed at
     ;; the earliest in version 31.1.  The idea is to phase out the
     ;; requirement for a "footer line" without unduly impacting users
@@ -1190,7 +1191,6 @@ boundaries."
     ;; Try to include a trailing newline.
     (forward-line)
     (narrow-to-region start (point))
-    (require 'lisp-mnt)
     ;; Use some headers we've invented to drive the process.
     (let* (;; Prefer Package-Version; if defined, the package author
            ;; probably wants us to use it.  Otherwise try Version.
@@ -2498,8 +2498,9 @@ compiled."
 (defun package-delete (pkg-desc &optional force nosave)
   "Delete package PKG-DESC.
 
-Argument PKG-DESC is a full description of package as vector.
-Interactively, prompt the user for the package name and version.
+Argument PKG-DESC is the full description of the package, for example as
+obtained by `package-get-descriptor'.  Interactively, prompt the user
+for the package name and version.
 
 When package is used elsewhere as dependency of another package,
 refuse deleting it and return an error.
@@ -2646,17 +2647,24 @@ will be deleted."
         (message "Nothing to autoremove")))))
 
 (defun package-isolate (packages &optional temp-init)
-  "Start an uncustomised Emacs and only load a set of PACKAGES.
+  "Start an uncustomized Emacs and only load a set of PACKAGES.
+Interactively, prompt for PACKAGES to load, which should be specified
+separated by commas.
+If called from Lisp, PACKAGES should be a list of packages to load.
 If TEMP-INIT is non-nil, or when invoked with a prefix argument,
-the Emacs user directory is set to a temporary directory."
+the Emacs user directory is set to a temporary directory.
+This command is intended for testing Emacs and/or the packages
+in a clean environment."
   (interactive
    (cl-loop for p in (cl-loop for p in (package--alist) append (cdr p))
 	    unless (package-built-in-p p)
 	    collect (cons (package-desc-full-name p) p) into table
 	    finally return
-	    (list (cl-loop for c in (completing-read-multiple
-                                     "Isolate packages: " table
-                                     nil t)
+	    (list
+             (cl-loop for c in
+                      (completing-read-multiple
+                       "Packages to isolate, as comma-separated list: " table
+                       nil t)
 		           collect (alist-get c table nil nil #'string=))
                   current-prefix-arg)))
   (let* ((name (concat "package-isolate-"

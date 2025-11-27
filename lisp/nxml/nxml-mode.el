@@ -1,6 +1,6 @@
 ;;; nxml-mode.el --- a new XML mode  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2003-2004, 2007-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2003-2004, 2007-2025 Free Software Foundation, Inc.
 
 ;; Author: James Clark
 ;; Keywords: text, hypermedia, languages, XML
@@ -531,6 +531,7 @@ Many aspects this mode can be customized using
   (setq-local comment-end-skip "[ \t\r\n]*-->")
   (setq-local comment-line-break-function #'nxml-newline-and-indent)
   (setq-local comment-quote-nested-function #'nxml-comment-quote-nested)
+  (setq-local comment-continue "") ; avoid double-hyphens as a padding
   (save-excursion
     (save-restriction
       (widen)
@@ -1521,6 +1522,8 @@ of the line.  This expects the xmltok-* variables to be set up as by
 	((progn
 	   (goto-char pos)
 	   (forward-line -1)
+           (while (looking-at "^[[:blank:]]*$")
+             (forward-line -1))
 	   (<= (point) xmltok-start))
 	 (goto-char (+ xmltok-start (length open-delim)))
 	 (when (and (string= open-delim "<!--")

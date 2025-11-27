@@ -1,6 +1,6 @@
 /* Communication module for Android terminals.
 
-Copyright (C) 2023-2024 Free Software Foundation, Inc.
+Copyright (C) 2023-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -189,7 +189,7 @@ Alternatively, return nil if the clipboard is empty.  */)
   const char *data;
 
   if (!android_init_gui)
-    error ("No Android display connection!");
+    error ("No Android display connection");
 
   method = clipboard_class.get_clipboard;
   text
@@ -258,7 +258,7 @@ for.  Use `android-browse-url' instead.  */)
   Lisp_Object value;
 
   if (!android_init_gui)
-    error ("No Android display connection!");
+    error ("No Android display connection");
 
   CHECK_STRING (url);
   value = android_browse_url (url, send);
@@ -290,7 +290,7 @@ data type available from the clipboard.  */)
   Lisp_Object targets, tem;
 
   if (!android_init_gui)
-    error ("No Android display connection!");
+    error ("No Android display connection");
 
   targets = Qnil;
   block_input ();
@@ -418,7 +418,10 @@ close_asset_fd (void *afd)
 }
 
 /* Return the offset, file descriptor and length of the data contained
-   in the asset file descriptor AFD, in *FD, *OFFSET, and *LENGTH.
+   in the asset file descriptor AFD, in *FD, *OFFSET, and *LENGTH.  AFD
+   will not be released if an exception is detected; it is the
+   responsibility of the caller to arrange that it be.
+
    Value is 0 upon success, 1 otherwise.  */
 
 static int
@@ -487,6 +490,9 @@ extract_fd_offsets (jobject afd, int *fd, jlong *offset, jlong *length)
       *fd = (*android_java_env)->CallIntMethod (android_java_env,
 						java_fd,
 						fd_class.get_fd);
+      android_exception_check_1 (java_fd);
+      ANDROID_DELETE_LOCAL_REF (java_fd);
+
       if (*fd >= 0)
 	return 0;
     }
@@ -544,7 +550,7 @@ does not have any corresponding data.  In that case, use
   char *buffer, *start;
 
   if (!android_init_gui)
-    error ("No Android display connection!");
+    error ("No Android display connection");
 
   CHECK_STRING (type);
 
@@ -945,7 +951,7 @@ keywords is understood:
 		No more than three actions defined here will be
 		displayed, not counting any with "default" as its
 		key.
-  :timeout	Number of miliseconds from the display of the
+  :timeout	Number of milliseconds from the display of the
 		notification at which it will be automatically
 		dismissed, or a value of zero or smaller if it
 		is to remain until user action is taken to dismiss
@@ -1003,7 +1009,7 @@ usage: (android-notifications-notify &rest ARGS) */)
   AUTO_STRING (default_icon, "ic_dialog_alert");
 
   if (!android_init_gui)
-    error ("No Android display connection!");
+    error ("No Android display connection");
 
   /* Clear each variable above.  */
   title = body = replaces_id = group = icon = urgency = actions = Qnil;

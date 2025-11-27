@@ -1,5 +1,5 @@
 /* Compile Emacs Lisp into native code.
-   Copyright (C) 2019-2024 Free Software Foundation, Inc.
+   Copyright (C) 2019-2025 Free Software Foundation, Inc.
 
 Author: Andrea Corallo <acorallo@gnu.org>
 
@@ -878,7 +878,7 @@ bcall0 (Lisp_Object f)
 }
 
 static gcc_jit_block *
-retrive_block (Lisp_Object block_name)
+retrieve_block (Lisp_Object block_name)
 {
   Lisp_Object value = Fgethash (block_name, comp.func_blocks_h, Qnil);
 
@@ -2298,7 +2298,7 @@ emit_limple_insn (Lisp_Object insn)
   if (EQ (op, Qjump))
     {
       /* Unconditional branch.  */
-      gcc_jit_block *target = retrive_block (arg[0]);
+      gcc_jit_block *target = retrieve_block (arg[0]);
       gcc_jit_block_end_with_jump (comp.block, NULL, target);
     }
   else if (EQ (op, Qcond_jump))
@@ -2306,8 +2306,8 @@ emit_limple_insn (Lisp_Object insn)
       /* Conditional branch.  */
       gcc_jit_rvalue *a = emit_mvar_rval (arg[0]);
       gcc_jit_rvalue *b = emit_mvar_rval (arg[1]);
-      gcc_jit_block *target1 = retrive_block (arg[2]);
-      gcc_jit_block *target2 = retrive_block (arg[3]);
+      gcc_jit_block *target1 = retrieve_block (arg[2]);
+      gcc_jit_block *target2 = retrieve_block (arg[3]);
 
       if ((!NILP (CALL1I (comp-cstr-imm-vld-p, arg[0]))
 	   && NILP (CALL1I (comp-cstr-imm, arg[0])))
@@ -2330,8 +2330,8 @@ emit_limple_insn (Lisp_Object insn)
 	gcc_jit_context_new_rvalue_from_int (comp.ctxt,
 					     comp.ptrdiff_type,
 					     XFIXNUM (arg[0]));
-      gcc_jit_block *target1 = retrive_block (arg[1]);
-      gcc_jit_block *target2 = retrive_block (arg[2]);
+      gcc_jit_block *target1 = retrieve_block (arg[1]);
+      gcc_jit_block *target2 = retrieve_block (arg[2]);
       gcc_jit_rvalue *test = gcc_jit_context_new_comparison (
 			       comp.ctxt,
 			       NULL,
@@ -2360,8 +2360,8 @@ emit_limple_insn (Lisp_Object insn)
 	gcc_jit_context_new_rvalue_from_int (comp.ctxt,
 					     comp.int_type,
 					     h_num);
-      gcc_jit_block *handler_bb = retrive_block (arg[2]);
-      gcc_jit_block *guarded_bb = retrive_block (arg[3]);
+      gcc_jit_block *handler_bb = retrieve_block (arg[2]);
+      gcc_jit_block *guarded_bb = retrieve_block (arg[3]);
       emit_limple_push_handler (handler, handler_type, handler_bb, guarded_bb,
 				arg[0]);
     }
@@ -2821,12 +2821,12 @@ emit_static_object (const char *name, Lisp_Object obj)
      <https://gcc.gnu.org/ml/jit/2019-q3/msg00013.html>.
 
      Adjust if possible to reduce the number of function calls.  */
-  size_t chunck_size = NILP (Fcomp_libgccjit_version ()) ? 200 : 1024;
-  char *buff = xmalloc (chunck_size);
+  size_t chunk_size = NILP (Fcomp_libgccjit_version ()) ? 200 : 1024;
+  char *buff = xmalloc (chunk_size);
   for (ptrdiff_t i = 0; i < len;)
     {
-      strncpy (buff, p, chunck_size);
-      buff[chunck_size - 1] = 0;
+      strncpy (buff, p, chunk_size);
+      buff[chunk_size - 1] = 0;
       uintptr_t l = strlen (buff);
 
       if (l != 0)
@@ -4346,7 +4346,7 @@ compile_function (Lisp_Object func)
 	declare_block (block_name);
     }
 
-  gcc_jit_block_add_assignment (retrive_block (Qentry),
+  gcc_jit_block_add_assignment (retrieve_block (Qentry),
 				NULL,
 				comp.func_relocs_local,
 				gcc_jit_lvalue_as_rvalue (comp.func_relocs));
@@ -4361,7 +4361,7 @@ compile_function (Lisp_Object func)
 	xsignal1 (Qnative_ice,
 		  build_string ("basic block is missing or empty"));
 
-      comp.block = retrive_block (block_name);
+      comp.block = retrieve_block (block_name);
       while (CONSP (insns))
 	{
 	  Lisp_Object insn = XCAR (insns);
@@ -5297,7 +5297,7 @@ check_comp_unit_relocs (struct Lisp_Native_Comp_Unit *comp_u)
       Lisp_Object x = data_imp_relocs[i];
       if (EQ (x, Qlambda_fixup))
 	return false;
-      else if (SUBR_NATIVE_COMPILEDP (x))
+      else if (NATIVE_COMP_FUNCTIONP (x))
 	{
 	  if (NILP (Fgethash (x, comp_u->lambda_gc_guard_h, Qnil)))
 	    return false;
@@ -5756,7 +5756,7 @@ natively-compiled one.  */);
   DEFSYM (Qd_ephemeral, "d-ephemeral");
 
   /* Others.  */
-  DEFSYM (Qcomp, "comp");
+  DEFSYM (Qnative_compiler, "native-compiler");
   DEFSYM (Qfixnum, "fixnum");
   DEFSYM (Qscratch, "scratch");
   DEFSYM (Qlate, "late");

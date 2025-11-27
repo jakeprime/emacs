@@ -1,6 +1,6 @@
 ;;; em-tramp.el --- Eshell features that require Tramp  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2025 Free Software Foundation, Inc.
 
 ;; Author: Aidan Gauland <aidalgol@no8wireless.co.nz>
 
@@ -35,7 +35,7 @@
 
 ;; There are no items in this custom group, but eshell modules (ab)use
 ;; custom groups.
-;;;###autoload
+;;;###esh-module-autoload
 (progn
  (defgroup eshell-tramp nil
    "This module defines commands that use Tramp in a way that is
@@ -152,9 +152,4 @@ Execute a COMMAND as the superuser or another USER.")
 (put 'eshell/doas 'eshell-no-numeric-conversions t)
 
 (provide 'em-tramp)
-
-;; Local Variables:
-;; generated-autoload-file: "esh-groups.el"
-;; End:
-
 ;;; em-tramp.el ends here

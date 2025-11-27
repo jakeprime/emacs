@@ -1,5 +1,5 @@
 /* Lisp functions for making directory listings.
-   Copyright (C) 1985-1986, 1993-1994, 1999-2024 Free Software
+   Copyright (C) 1985-1986, 1993-1994, 1999-2025 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -126,6 +126,10 @@ open_directory (Lisp_Object dirname, Lisp_Object encoded_dirname, int *fdp)
   else if (errno == EINTR)
     {
       maybe_quit ();
+
+      /* Reload the address of DIRNAME's data, as it might have been
+	 relocated by GC.  */
+      name = SSDATA (dirname);
       goto again;
     }
 #endif

@@ -1,6 +1,6 @@
 ;;; calc.el --- the GNU Emacs calculator  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1990-1993, 2001-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1990-1993, 2001-2025 Free Software Foundation, Inc.
 
 ;; Author: David Gillespie <daveg@synaptics.com>
 ;; Keywords: convenience, extensions
@@ -2184,7 +2184,7 @@ the United States."
 	(beginning-of-line)
 	(if (eobp)
             (forward-line -1))
-	(if (or (bobp) (eobp))
+	(if (and (bobp) (eobp))
 	    (setq overlay-arrow-position nil)   ; trail is empty
 	  (set-marker calc-trail-pointer (point) (current-buffer))
 	  (setq calc-trail-overlay (concat (buffer-substring (point)

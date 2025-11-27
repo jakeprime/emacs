@@ -1,6 +1,6 @@
 ;;; simple.el --- basic editing commands for Emacs  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1985-1987, 1993-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1985-1987, 1993-2025 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: internal
@@ -31,7 +31,6 @@
 (eval-when-compile (require 'cl-lib))
 
 (declare-function widget-convert "wid-edit" (type &rest args))
-(declare-function shell-mode "shell" ())
 
 ;;; From compile.el
 (defvar compilation-current-error)
@@ -916,7 +915,9 @@ In programming language modes, this is the same as TAB.
 In some text modes, where TAB inserts a tab, this indents to the
 column specified by the function `current-left-margin'."
   (interactive "*")
-  (let ((pos (point))
+  ;; Use a marker because the call to 'newline' below could insert some
+  ;; text, e.g., if 'abbrev-mode' is turned on.
+  (let ((pos (point-marker))
         (electric-indent-mode nil))
     ;; Be careful to insert the newline before indenting the line.
     ;; Otherwise, the indentation might be wrong.
@@ -1828,8 +1829,7 @@ in *Help* buffer.  See also the command `describe-char'."
   (interactive "P")
   (let* ((char (following-char))
          (char-name (and what-cursor-show-names
-                         (or (get-char-code-property char 'name)
-                             (get-char-code-property char 'old-name))))
+                         (char-to-name char)))
          (char-name-fmt (if char-name
                             (format ", %s" char-name)
                           ""))
@@ -2033,6 +2033,7 @@ function `read-from-minibuffer'."
         (set-syntax-table emacs-lisp-mode-syntax-table)
         (add-hook 'completion-at-point-functions
                   #'elisp-completion-at-point nil t)
+        (setq-local trusted-content :all)
         (run-hooks 'eval-expression-minibuffer-setup-hook))
     (read-from-minibuffer prompt initial-contents
                           read--expression-map t
@@ -2274,7 +2275,7 @@ This is used by the \\<minibuffer-local-must-match-map>\\[execute-extended-comma
   "Minor mode used for completion in `read-extended-command'.")
 
 (defun read-extended-command (&optional prompt)
-  "Read command name to invoke via `execute-extended-command'.
+  "Read and return name of command to invoke via `execute-extended-command'.
 Use `read-extended-command-predicate' to determine which commands
 to include among completion candidates.
 
@@ -4061,7 +4062,7 @@ REASON describes the reason that the boundary is being added; see
 (defun undo-auto--boundaries (cause)
   "Check recently changed buffers and add a boundary if necessary.
 REASON describes the reason that the boundary is being added; see
-`undo-last-boundary' for more information."
+`undo-auto--last-boundary-cause' for more information."
   ;; (Bug #23785) All commands should ensure that there is an undo
   ;; boundary whether they have changed the current buffer or not.
   (when (eq cause 'command)
@@ -4310,7 +4311,7 @@ after the default value."
   "Keymap used for completing shell commands in minibuffer.")
 
 (defun read-shell-command (prompt &optional initial-contents hist &rest args)
-  "Read a shell command from the minibuffer.
+  "Read a shell command from the minibuffer, and return it as a string.
 The arguments are the same as the ones of `read-from-minibuffer',
 except READ and KEYMAP are missing and HIST defaults
 to `shell-command-history'."
@@ -4488,9 +4489,10 @@ to execute it asynchronously.
 
 The output appears in OUTPUT-BUFFER, which could be a buffer or
 the name of a buffer, and defaults to `shell-command-buffer-name-async'
-if nil or omitted.  That buffer is in shell mode.  Note that, unlike
-with `shell-command', OUTPUT-BUFFER can only be a buffer, a buffer's
-name (a string), or nil.
+if nil or omitted.  That buffer is in major mode specified by the
+variable `async-shell-command-mode'.  Note that, unlike with
+`shell-command', OUTPUT-BUFFER can only be a buffer, a buffer's name
+(a string), or nil.
 
 You can customize `async-shell-command-buffer' to specify what to do
 when the buffer specified by `shell-command-buffer-name-async' is
@@ -4523,7 +4525,7 @@ a shell (with its need to quote arguments)."
 				 (dired-get-filename nil t)))))
 			  (and filename (file-relative-name filename))))
     nil
-    ;; FIXME: the following argument is always ignored by 'shell-commnd',
+    ;; FIXME: the following argument is always ignored by 'shell-command',
     ;; when the command is invoked asynchronously, except, perhaps, when
     ;; 'default-directory' is remote.
     shell-command-default-error-buffer))
@@ -4533,6 +4535,9 @@ a shell (with its need to quote arguments)."
 
 (declare-function comint-output-filter "comint" (process string))
 (declare-function comint-term-environment "comint" ())
+
+(defvar async-shell-command-mode 'shell-command-mode
+  "Major mode to use for the output of asynchronous `shell-command'.")
 
 (defun shell-command (command &optional output-buffer error-buffer)
   "Execute string COMMAND in inferior shell; display output, if any.
@@ -4544,9 +4549,9 @@ directory in the prompt.
 
 If COMMAND ends in `&', execute it asynchronously.
 The output appears in the buffer whose name is specified
-by `shell-command-buffer-name-async'.  That buffer is in shell
-mode.  You can also use `async-shell-command' that automatically
-adds `&'.
+by `shell-command-buffer-name-async'.  That buffer is in major mode
+specified by the variable `async-shell-command-mode'.  You can also use
+`async-shell-command' that automatically adds `&'.
 
 Otherwise, COMMAND is executed synchronously.  The output appears in
 the buffer named by `shell-command-buffer-name'.  If the output is
@@ -4722,7 +4727,7 @@ impose the use of a shell (with its need to quote arguments)."
 		  (setq proc
 			(start-process-shell-command "Shell" buffer command)))
 		(setq mode-line-process '(":%s"))
-                (shell-mode)
+                (funcall async-shell-command-mode)
                 (setq-local revert-buffer-function
                             (lambda (&rest _)
                               (async-shell-command command buffer)))
@@ -5414,7 +5419,8 @@ Runs `prefix-command-preserve-state-hook'."
 (add-hook 'prefix-command-preserve-state-hook
           #'universal-argument--preserve)
 (defun universal-argument--preserve ()
-  (setq prefix-arg current-prefix-arg))
+  (setq prefix-arg current-prefix-arg)
+  (setq current-prefix-arg last-prefix-arg))
 
 (defvar universal-argument-map
   (let ((map (make-sparse-keymap))
@@ -6425,7 +6431,8 @@ variable to determine how strings should be escaped."
 (defvar read-from-kill-ring-history)
 (defun read-from-kill-ring (prompt)
   "Read a `kill-ring' entry using completion and minibuffer history.
-PROMPT is a string to prompt with."
+PROMPT is a string to prompt with.
+Return the entry as a string."
   ;; `current-kill' updates `kill-ring' with a possible interprogram-paste
   (current-kill 0)
   (let* ((history-add-new-input nil)
@@ -6698,28 +6705,53 @@ If ARG is zero, kill current line but exclude the trailing newline."
   (unless (eq last-command 'kill-region)
     (kill-new "")
     (setq last-command 'kill-region))
-  (cond ((zerop arg)
-	 ;; We need to kill in two steps, because the previous command
-	 ;; could have been a kill command, in which case the text
-	 ;; before point needs to be prepended to the current kill
-	 ;; ring entry and the text after point appended.  Also, we
-	 ;; need to use save-excursion to avoid copying the same text
-	 ;; twice to the kill ring in read-only buffers.
-	 (save-excursion
-	   (kill-region (point) (progn (forward-visible-line 0) (point))))
-	 (kill-region (point) (progn (end-of-visible-line) (point))))
-	((< arg 0)
-	 (save-excursion
-	   (kill-region (point) (progn (end-of-visible-line) (point))))
-	 (kill-region (point)
-		      (progn (forward-visible-line (1+ arg))
-			     (unless (bobp) (backward-char))
-			     (point))))
-	(t
-	 (save-excursion
-	   (kill-region (point) (progn (forward-visible-line 0) (point))))
-	 (kill-region (point)
-		      (progn (forward-visible-line arg) (point))))))
+  ;; - We need to kill in two steps, because the previous command
+  ;;   could have been a kill command, in which case the text before
+  ;;   point needs to be prepended to the current kill ring entry and
+  ;;   the text after point appended.
+  ;; - We need to be careful to avoid copying text twice to the kill
+  ;;   ring in read-only buffers.
+  ;; - We need to determine the boundaries of visible lines before we
+  ;;   do the first kill.  Otherwise `after-change-functions' may
+  ;;   change visibility (bug#65734).
+  (let (;; The beginning of both regions to kill
+        (regions-begin (point-marker))
+        ;; The end of the first region to kill.  Moreover, after
+        ;; evaluation of the value form, (point) will be the end of
+        ;; the second region to kill.
+        (region1-end (cond ((zerop arg)
+                            (prog1 (save-excursion
+                                     (forward-visible-line 0)
+                                     (point-marker))
+                              (end-of-visible-line)))
+	                   ((< arg 0)
+	                    (prog1 (save-excursion
+                                     (end-of-visible-line)
+                                     (point-marker))
+                              (forward-visible-line (1+ arg))
+	                      (unless (bobp) (backward-char))))
+	                   (t
+	                    (prog1 (save-excursion
+                                     (forward-visible-line 0)
+                                     (point-marker))
+	                      (forward-visible-line arg))))))
+    ;; - Pass the marker positions and not the markers themselves.
+    ;;   kill-region determines whether to prepend or append to a
+    ;;   previous kill by checking the direction of the region.  But
+    ;;   it deletes the content and hence moves the markers before
+    ;;   that.  That effectively makes every region delimited by
+    ;;   markers an (empty) forward region.
+    ;; - Make the first kill-region emit a non-local exit only if the
+    ;;   second kill-region below would not operate on a non-empty
+    ;;   region.
+    (let ((kill-read-only-ok (or kill-read-only-ok
+                                 (/= regions-begin (point)))))
+      (kill-region (marker-position regions-begin)
+                   (marker-position region1-end)))
+    (kill-region (marker-position regions-begin)
+                 (point))
+    (set-marker regions-begin nil)
+    (set-marker region1-end nil)))
 
 (defun forward-visible-line (arg)
   "Move forward by ARG lines, ignoring currently invisible newlines only.
@@ -7055,11 +7087,15 @@ point otherwise."
   :group 'editing-basics)
 
 (defun use-region-beginning ()
-  "Return the start of the region if `use-region-p'."
+  "Return the start of the region if `use-region-p' returns non-nil.
+This is a convenience function to use in `interactive' forms of
+commands that need to act on the region when it is active."
   (and (use-region-p) (region-beginning)))
 
 (defun use-region-end ()
-  "Return the end of the region if `use-region-p'."
+  "Return the end of the region if `use-region-p' returns non-nil.
+This is a convenience function to use in `interactive' forms of
+commands that need to act on the region when it is active."
   (and (use-region-p) (region-end)))
 
 (defun use-region-noncontiguous-p ()
@@ -8622,7 +8658,7 @@ are interchanged."
   (transpose-subr 'forward-word arg))
 
 (defun transpose-sexps-default-function (arg)
-  "Default method to locate a pair of points for transpose-sexps."
+  "Default method to locate a pair of points for `transpose-sexps'."
   ;; Here we should try to simulate the behavior of
   ;; (cons (progn (forward-sexp x) (point))
   ;;       (progn (forward-sexp (- x)) (point)))
@@ -10679,8 +10715,10 @@ Returns the newly created indirect buffer."
      (list (if current-prefix-arg
 	       (read-buffer "Name of indirect buffer: " (current-buffer)))
 	   t)))
-  (let ((pop-up-windows t))
-    (clone-indirect-buffer newname display-flag norecord)))
+  ;; For compatibility, don't display the buffer if display-flag is nil.
+  (let ((buffer (clone-indirect-buffer newname nil norecord)))
+    (when display-flag
+      (switch-to-buffer-other-window buffer norecord))))
 
 
 ;;; Handling of Backspace and Delete keys.
@@ -10701,10 +10739,10 @@ option's default value is set to t, so that Backspace can be used
 to delete backward, and Delete can be used to delete forward.
 
 If not running under a window system, customizing this option
-accomplishes a similar effect by mapping C-h, which is usually
-generated by the Backspace key, to DEL, and by mapping DEL to C-d
-via `keyboard-translate'.  The former functionality of C-h is
-available on the F1 key.  You should probably not use this
+accomplishes a similar effect by mapping \\`C-h', which is usually
+generated by the Backspace key, to \\`DEL', and by mapping \\`DEL' to
+\\`C-d' via `keyboard-translate'.  The former functionality of \\`C-h'
+is available on the F1 key.  You should probably not use this
 setting if you don't have both Backspace, Delete and F1 keys.
 
 Setting this variable with setq doesn't take effect.  Programmatically,
@@ -10747,27 +10785,27 @@ call `normal-erase-is-backspace-mode' (which see) instead."
 (define-minor-mode normal-erase-is-backspace-mode
   "Toggle the Erase and Delete mode of the Backspace and Delete keys.
 
-On window systems, when this mode is on, Delete is mapped to C-d
-and Backspace is mapped to DEL; when this mode is off, both
-Delete and Backspace are mapped to DEL.  (The remapping goes via
+On window systems, when this mode is on, Delete is mapped to \\`C-d'
+and Backspace is mapped to \\`DEL'; when this mode is off, both
+Delete and Backspace are mapped to \\`DEL'.  (The remapping goes via
 `local-function-key-map', so binding Delete or Backspace in the
 global or local keymap will override that.)
 
 In addition, on window systems, the bindings of C-Delete, M-Delete,
 C-M-Delete, C-Backspace, M-Backspace, and C-M-Backspace are changed in
 the global keymap in accordance with the functionality of Delete and
-Backspace.  For example, if Delete is remapped to C-d, which deletes
+Backspace.  For example, if Delete is remapped to \\`C-d', which deletes
 forward, C-Delete is bound to `kill-word', but if Delete is remapped
-to DEL, which deletes backward, C-Delete is bound to
+to \\`DEL', which deletes backward, C-Delete is bound to
 `backward-kill-word'.
 
 If not running on a window system, a similar effect is accomplished by
-remapping C-h (normally produced by the Backspace key) and DEL via
-`keyboard-translate': if this mode is on, C-h is mapped to DEL and DEL
-to C-d; if it's off, the keys are not remapped.
+remapping \\`C-h' (normally produced by the Backspace key) and \\`DEL'
+via `keyboard-translate': if this mode is on, \\`C-h' is mapped to
+\\`DEL' and \\`DEL' to \\`C-d'; if it's off, the keys are not remapped.
 
 When not running on a window system, and this mode is turned on, the
-former functionality of C-h is available on the F1 key.  You should
+former functionality of \\`C-h' is available on the F1 key.  You should
 probably not turn on this mode on a text-only terminal if you don't
 have both Backspace, Delete and F1 keys.
 
@@ -11117,7 +11155,9 @@ too short to have a dst element.
           (when initial-scratch-message
             (insert (substitute-command-keys initial-scratch-message))
             (set-buffer-modified-p nil))
-          (funcall initial-major-mode))
+          (funcall initial-major-mode)
+          (when (eq initial-major-mode 'lisp-interaction-mode)
+            (setq-local trusted-content :all)))
         scratch)))
 
 (defun scratch-buffer ()
@@ -11154,7 +11194,9 @@ killed."
   (string= string ""))
 
 (defun read-signal-name ()
-  "Read a signal number or name."
+  "Read a signal number or name.
+Return the signal number, if the user entered a number, otherwise
+the signal symbol."
   (let ((value
          (completing-read "Signal code or name: "
                           (signal-names)

@@ -1,6 +1,6 @@
 ;;; register.el --- register commands for Emacs      -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1985, 1993-1994, 2001-2024 Free Software Foundation,
+;; Copyright (C) 1985, 1993-1994, 2001-2025 Free Software Foundation,
 ;; Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -129,21 +129,27 @@ description of the argument.  The function to use is set according
 to the value of `register--read-with-preview-function'.")
 
 (defcustom register-use-preview 'traditional
-  "Whether to show register preview when modifying registers.
+  "Whether register commands show preview of registers with non-nil values.
 
-When set to `t', show a preview buffer with navigation and
-highlighting.
-When set to \\='insist, behave as with `t', but allow exiting the
-minibuffer by pressing the register name a second time.  E.g.,
-press \"a\" to select register \"a\", then press \"a\" again to
-exit the minibuffer.
-When nil, show a preview buffer without navigation and highlighting, and
-exit the minibuffer immediately after inserting response in minibuffer.
-When set to \\='never, behave as with nil, but with no preview buffer at
-all; the preview buffer is still accessible with `help-char' (C-h).
-When set to \\='traditional (the default), provide a more basic preview
+When set to t, show a preview buffer with navigation and highlighting.
+
+When set to `insist', behave as with t, but allow exiting the minibuffer by
+pressing the register name a second time.  For example, press \\`a' to
+select register \"a\", then press \\`a' again to exit the minibuffer.
+
+When set to nil, show a preview buffer without navigation and
+highlighting, and exit the minibuffer immediately after inserting
+response in minibuffer.
+
+When set to `never', behave as with nil, but with no preview buffer at
+all; the preview buffer is still accessible with `help-char' (\\`C-h').
+
+When set to `traditional' (the default), provide a more basic preview
 according to `register-preview-delay'; this preserves the traditional
-behavior of Emacs 29 and before."
+behavior of Emacs 29 and before.
+
+Setting this variable with `setq' has no effect; use either `setopt'
+or `customize-option' to change its value."
   :type '(choice
           (const :tag "Use preview" t)
           (const :tag "Use preview and exit by pressing register name" insist)
@@ -406,7 +412,8 @@ Format of each entry is controlled by the variable `register-preview-function'."
                                                    (window-height . fit-window-to-buffer)
 	                                           (preserve-size . (nil . t)))
   "Window configuration for the register preview buffer."
-  :type display-buffer--action-custom-type)
+  :type display-buffer--action-custom-type
+  :version "30.1")
 
 (defun register-preview-1 (buffer &optional show-empty types)
   "Pop up a window showing the preview of registers in BUFFER.
@@ -562,7 +569,11 @@ or \\='never."
                        (setq pat input))))
                  (if (setq win (get-buffer-window buffer))
                      (with-selected-window win
-                       (when noconfirm
+                       (when (or (eq noconfirm t) ; Using insist
+                                 ;; Don't exit when noconfirm == (never)
+                                 ;; If we are here user has pressed C-h
+                                 ;; calling `register-preview-1'.
+                                 (memq nil noconfirm))
                          ;; Happen only when
                          ;; *-use-preview == insist.
                          (exit-minibuffer))

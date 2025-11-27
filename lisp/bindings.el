@@ -1,6 +1,6 @@
 ;;; bindings.el --- define standard key bindings and some variables  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1985-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1985-2025 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: internal
@@ -978,9 +978,8 @@ language you are using."
 ;;        It seems that they can't because they're handled via
 ;;        special-event-map which is used at very low-level.  -stef
 (global-set-key [delete-frame] 'handle-delete-frame)
-(global-set-key [iconify-frame] 'ignore-event)
-(global-set-key [make-frame-visible] 'ignore-event)
-
+(global-set-key [iconify-frame] 'ignore)
+(global-set-key [make-frame-visible] 'ignore)
 
 ;These commands are defined in editfns.c
 ;but they are not assigned to keys there.

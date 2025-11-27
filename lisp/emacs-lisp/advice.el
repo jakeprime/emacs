@@ -1,6 +1,6 @@
 ;;; advice.el --- An overloading mechanism for Emacs Lisp functions  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1993-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1993-2025 Free Software Foundation, Inc.
 
 ;; Author: Hans Chalupsky <hans@cs.buffalo.edu>
 ;; Maintainer: emacs-devel@gnu.org
@@ -2845,7 +2845,11 @@ The current definition and its cache-id will be put into the cache."
          (old-ispec (interactive-form advicefunname)))
     (fset advicefunname
           (or verified-cached-definition
-              (ad-make-advised-definition function)))
+              (eval
+               (ad-make-advised-definition function)
+               ;; We don't keep track of the `lexical-binding' of the
+               ;; various chunks: assume it's the old dynbound dialect.
+               nil)))
     (put advicefunname 'function-documentation
 	 `(ad--make-advised-docstring ',advicefunname))
     (unless (equal (interactive-form advicefunname) old-ispec)

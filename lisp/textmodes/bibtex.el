@@ -1,6 +1,6 @@
 ;;; bibtex.el --- BibTeX mode for GNU Emacs -*- lexical-binding: t -*-
 
-;; Copyright (C) 1992-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1992-2025 Free Software Foundation, Inc.
 
 ;; Author: Stefan Schoef <schoef@offis.uni-oldenburg.de>
 ;;      Bengt Martensson <bengt@mathematik.uni-Bremen.de>
@@ -4638,13 +4638,17 @@ Return t if test was successful, nil otherwise."
             (bibtex-progress-message 'done)))))
 
     (if error-list
-        (let ((file (file-name-nondirectory (buffer-file-name)))
-              (dir default-directory)
-              (err-buf "*BibTeX validation errors*"))
+        (let* ((is-file (buffer-file-name))
+               (file (if is-file (file-name-nondirectory is-file) (buffer-name)))
+               (dir default-directory)
+               (err-buf "*BibTeX validation errors*"))
           (setq error-list (sort error-list #'car-less-than-car))
           (with-current-buffer (get-buffer-create err-buf)
             (setq default-directory dir)
             (unless (eq major-mode 'compilation-mode) (compilation-mode))
+            (unless is-file
+              (setq-local compilation-parse-errors-filename-function
+                          #'get-buffer))
             (let ((inhibit-read-only t))
               (delete-region (point-min) (point-max))
               (insert (substitute-command-keys

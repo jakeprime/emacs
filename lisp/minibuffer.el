@@ -1,6 +1,6 @@
 ;;; minibuffer.el --- Minibuffer and completion functions -*- lexical-binding: t -*-
 
-;; Copyright (C) 2008-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2025 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Package: emacs
@@ -1455,7 +1455,7 @@ pair of a group title string and a list of group candidate strings."
 (defvar completion-tab-width nil)
 
 (defvar completion-fail-discreetly nil
-  "If non-nil, stay quiet when there  is no match.")
+  "If non-nil, stay quiet when there is no match.")
 
 (defun completion--message (msg)
   (if completion-show-inline-help
@@ -2529,7 +2529,7 @@ any completion candidate highlighted in *Completions* window (to
 indicate that it is the selected candidate) will be un-highlighted,
 and point in the *Completions* window will be moved off such a candidate.
 This means that `RET' (`minibuffer-choose-completion-or-exit') will exit
-the minubuffer with the minibuffer's current contents, instead of the
+the minibuffer with the minibuffer's current contents, instead of the
 selected completion candidate."
   :type '(choice (const :tag "Candidates in *Completions* stay selected as you type" nil)
                  (const :tag "Typing deselects any completion candidate in *Completions*" t))
@@ -3091,7 +3091,7 @@ with `minibuffer-local-must-match-map'."
   "?"   #'self-insert-and-exit)
 
 (defun read-no-blanks-input (prompt &optional initial inherit-input-method)
-  "Read a string from the terminal, not allowing blanks.
+  "Read and return a string from the terminal, not allowing blanks.
 Prompt with PROMPT.  Whitespace terminates the input.  If INITIAL is
 non-nil, it should be a string, which is used as initial input, with
 point positioned at the end, so that SPACE will accept the input.
@@ -3343,7 +3343,7 @@ same as `substitute-in-file-name'."
     (file-error nil)))               ;PCM often calls with invalid directories.
 
 (defun completion--sifn-requote (upos qstr)
-  ;; We're looking for `qpos' such that:
+  ;; We're looking for (the largest) `qpos' such that:
   ;; (equal (substring (substitute-in-file-name qstr) 0 upos)
   ;;        (substitute-in-file-name (substring qstr 0 qpos)))
   ;; Big problem here: we have to reverse engineer substitute-in-file-name to
@@ -3373,11 +3373,13 @@ same as `substitute-in-file-name'."
       ;; Main assumption: nothing after qpos should affect the text before upos,
       ;; so we can work our way backward from the end of qstr, one character
       ;; at a time.
-      ;; Second assumptions: If qpos is far from the end this can be a bit slow,
+      ;; Second assumption: If qpos is far from the end this can be a bit slow,
       ;; so we speed it up by doing a first loop that skips a word at a time.
       ;; This word-sized loop is careful not to cut in the middle of env-vars.
       (while (let ((boundary (string-match "\\(\\$+{?\\)?\\w+\\W*\\'" qstr)))
                (and boundary
+                    ;; Try and make sure we keep the largest `qpos' (bug#72176).
+                    (not (string-match-p "/[/~]" qstr boundary))
                     (progn
                       (setq qprefix (substring qstr 0 boundary))
                       (string-prefix-p uprefix
@@ -3471,8 +3473,10 @@ like the `beginning-of-buffer' command."
      (if (listp default) default (list default)))))
 
 (defun read-file-name (prompt &optional dir default-filename mustmatch initial predicate)
-  "Read file name, prompting with PROMPT and completing in directory DIR.
-The return value is not expanded---you must call `expand-file-name' yourself.
+  "Read a file name, prompting with PROMPT and completing in directory DIR.
+Retrun the file name as a string.
+The return value is not expanded---you must call `expand-file-name'
+yourself.
 
 DIR is the directory to use for completing relative file names.
 It should be an absolute directory name, or nil (which means the
@@ -3506,8 +3510,8 @@ Fourth arg MUSTMATCH can take the following values:
   input unquoted by `substitute-in-file-name', which see.  If the
   function returns a non-nil value, the minibuffer is exited with
   that argument as the value.
-- anything else behaves like t except that typing RET does not exit if it
-  does non-null completion.
+- anything else behaves like t except that typing RET does not exit if
+  it does non-null completion.
 
 Fifth arg INITIAL specifies text to start with.  It will be
 interpreted as the trailing part of DEFAULT-FILENAME, so using a
@@ -3816,7 +3820,9 @@ Return the new suffix."
                             'point
                             (substring afterpoint 0 (cdr bounds)))))
          (all (completion-pcm--all-completions prefix pattern table pred)))
-    (completion-hilit-commonality all point (car bounds))))
+    (when all
+      (nconc (completion-pcm--hilit-commonality pattern all)
+             (car bounds)))))
 
 ;;; Partial-completion-mode style completion.
 
@@ -4049,24 +4055,26 @@ details."
 
 (defun completion--hilit-from-re (string regexp &optional point-idx)
   "Fontify STRING using REGEXP POINT-IDX.
-`completions-common-part' and `completions-first-difference' are
-used.  POINT-IDX is the position of point in the presumed \"PCM\"
-pattern that was used to generate derive REGEXP from."
-(let* ((md (and regexp (string-match regexp string) (cddr (match-data t))))
-       (pos (if point-idx (match-beginning point-idx) (match-end 0)))
-       (me (and md (match-end 0)))
-       (from 0))
-  (while md
-    (add-face-text-property from (pop md) 'completions-common-part nil string)
-    (setq from (pop md)))
-  (if (> (length string) pos)
-      (add-face-text-property
-       pos (1+ pos)
-       'completions-first-difference
-       nil string))
-  (unless (or (not me) (= from me))
-    (add-face-text-property from me 'completions-common-part nil string))
-  string))
+Uses `completions-common-part' and `completions-first-difference'
+faces to fontify STRING.
+POINT-IDX is the position of point in the presumed \"PCM\" pattern
+from which REGEXP was generated."
+  (let* ((md (and regexp (string-match regexp string) (cddr (match-data t))))
+         (pos (if point-idx (match-beginning point-idx) (match-end 0)))
+         (me (and md (match-end 0)))
+         (from 0))
+    (while md
+      (add-face-text-property from (pop md)
+                              'completions-common-part nil string)
+      (setq from (pop md)))
+    (if (and (numberp pos) (> (length string) pos))
+        (add-face-text-property
+         pos (1+ pos)
+         'completions-first-difference
+         nil string))
+    (unless (or (not me) (= from me))
+      (add-face-text-property from me 'completions-common-part nil string))
+    string))
 
 (defun completion--flex-score-1 (md-groups match-end len)
   "Compute matching score of completion.
@@ -4378,18 +4386,21 @@ the same set of elements."
                      (unique (or (and (eq prefix t) (setq prefix fixed))
                                  (and (stringp prefix)
                                       (eq t (try-completion prefix comps))))))
-                ;; if the common prefix is unique, it also is a common
-                ;; suffix, so we should add it for `prefix' elements
-                (unless (or (and (eq elem 'prefix) (not unique))
-                            (equal prefix ""))
-                  (push prefix res))
                 ;; If there's only one completion, `elem' is not useful
                 ;; any more: it can only match the empty string.
                 ;; FIXME: in some cases, it may be necessary to turn an
                 ;; `any' into a `star' because the surrounding context has
                 ;; changed such that string->pattern wouldn't add an `any'
                 ;; here any more.
-                (unless unique
+                (if unique
+                    ;; If the common prefix is unique, it also is a common
+                    ;; suffix, so we should add it for `prefix' elements.
+                    (push prefix res)
+                  ;; `prefix' only wants to include the fixed part before the
+                  ;; wildcard, not the result of growing that fixed part.
+                  (when (eq elem 'prefix)
+                    (setq prefix fixed))
+                  (push prefix res)
                   (push elem res)
                   ;; Extract common suffix additionally to common prefix.
                   ;; Don't do it for `any' since it could lead to a merged
@@ -4918,9 +4929,9 @@ contents."
     (error (minibuffer-complete-and-exit))))
 
 (defun minibuffer-complete-history ()
-  "Complete the minibuffer history as far as possible.
-Like `minibuffer-complete' but completes on the history items
-instead of the default completion table."
+  "Complete as far as possible using the minibuffer history.
+Like `minibuffer-complete' but completes using the history of minibuffer
+inputs for the prompting command, instead of the default completion table."
   (interactive)
   (let* ((history (symbol-value minibuffer-history-variable))
          (completions
@@ -4943,9 +4954,9 @@ instead of the default completion table."
            (complete-with-action action completions string pred)))))))
 
 (defun minibuffer-complete-defaults ()
-  "Complete minibuffer defaults as far as possible.
-Like `minibuffer-complete' but completes on the default items
-instead of the completion table."
+  "Complete as far as possible using the minibuffer defaults.
+Like `minibuffer-complete' but completes using the default items
+provided by the prompting command, instead of the completion table."
   (interactive)
   (when (and (not minibuffer-default-add-done)
              (functionp minibuffer-default-add-function))

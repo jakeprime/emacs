@@ -1,6 +1,6 @@
 @c -*-texinfo-*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990--1993, 1998--1999, 2001--2024 Free Software
+@c Copyright (C) 1990--1993, 1998--1999, 2001--2025 Free Software
 @c Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @node GNU Emacs Internals
@@ -555,16 +555,17 @@ object type; space allocated to the contents of buffers does not count.
 
 The initial threshold value is @code{GC_DEFAULT_THRESHOLD}, defined in
 @file{alloc.c}.  Since it's defined in @code{word_size} units, the
-value is 400,000 for the default 32-bit configuration and 800,000 for
-the 64-bit one.  If you specify a larger value, garbage collection
-will happen less often.  This reduces the amount of time spent garbage
-collecting (so Lisp programs will run faster between cycles of garbage
-collection that happen more rarely), but increases total memory use.
-You may want to do this when running a program that creates lots of
-Lisp data, especially if you need it to run faster.  However, we
-recommend against increasing the threshold for prolonged periods of
-time, and advise that you never set it higher than needed for the
-program to run in reasonable time.  Using thresholds higher than
+value is 400,000 for the default 32-bit configuration, and 800,000 for
+the 64-bit one and for 32-bit builds configured with the
+@option{--with-wide-int} option.  If you specify a larger value, garbage
+collection will happen less often.  This reduces the amount of time
+spent garbage collecting (so Lisp programs will run faster between
+cycles of garbage collection that happen more rarely), but increases
+total memory use.  You may want to do this when running a program that
+creates lots of Lisp data, especially if you need it to run faster.
+However, we recommend against increasing the threshold for prolonged
+periods of time, and advise that you never set it higher than needed for
+the program to run in reasonable time.  Using thresholds higher than
 necessary could potentially cause higher system-wide memory pressure,
 and also make each garbage-collection cycle take much more time, and
 should therefore be avoided.
@@ -584,6 +585,10 @@ garbage collection occurs only when both criteria are satisfied.
 As the heap size increases, the time to perform a garbage collection
 increases.  Thus, it can be desirable to do them less frequently in
 proportion.
+
+The initial percentage value is 0.1 in interactive sessions and while
+dumping Emacs (@pxref{Building Emacs}), and 1.0 in non-interactive
+(a.k.a.@: ``batch'') sessions.
 
 As with @code{gc-cons-threshold}, do not enlarge this more than
 necessary, and never for prolonged periods of time.
@@ -1021,7 +1026,7 @@ comment.  @xref{Documentation Basics}, for more details.
 (@code{int} and @code{bool}), the name of the C variable is the name
 of the Lisp variable with @code{-} replaced by @code{_}.  When the
 variable has type @code{Lisp_Object}, the convention is to also prefix
-the C variable name with @code{V}.  i.e.
+the C variable name with @code{V}.  This is an example:
 
 @smallexample
 DEFVAR_INT ("my-int-variable", my_int_variable,
@@ -1038,7 +1043,6 @@ with @code{let}.  In C sources, this is done by defining a
 corresponding, constant symbol, and using @code{specbind}.  By
 convention, @code{Qmy_lisp_variable} corresponds to
 @code{Vmy_lisp_variable}; to define it, use the @code{DEFSYM} macro.
-i.e.
 
 @smallexample
 DEFSYM (Qmy_lisp_variable, "my-lisp-variable");
@@ -1050,17 +1054,17 @@ DEFSYM (Qmy_lisp_variable, "my-lisp-variable");
 specbind (Qmy_lisp_variable, Qt);
 @end smallexample
 
-  In Lisp symbols sometimes need to be quoted, to achieve the same
-effect in C you again use the corresponding constant symbol
+  In Lisp, symbols sometimes need to be quoted.  To achieve the same
+effect in C, you again use the corresponding constant symbol
 @code{Qmy_lisp_variable}.  For example, when creating a buffer-local
-variable (@pxref{Buffer-Local Variables}) in Lisp you would write:
+variable (@pxref{Buffer-Local Variables}) in Lisp, you would write:
 
 @smallexample
 (make-variable-buffer-local 'my-lisp-variable)
 @end smallexample
 
-In C the corresponding code uses @code{Fmake_variable_buffer_local} in
-combination with @code{DEFSYM}, i.e.
+In C, the corresponding code uses @code{Fmake_variable_buffer_local} in
+combination with @code{DEFSYM}:
 
 @smallexample
 DEFSYM (Qmy_lisp_variable, "my-lisp-variable");
@@ -1164,7 +1168,8 @@ functions.
 
   If you define a function which is side-effect free or pure, give it
 a non-@code{nil} @code{side-effect-free} or @code{pure} property,
-respectively (@pxref{Standard Properties}).
+respectively (@pxref{Standard Properties}).  See the lists defined in
+@samp{byte-opt.el}.
 
 @node Writing Dynamic Modules
 @section Writing Dynamically-Loaded Modules
@@ -2745,7 +2750,7 @@ The window-relative vertical position of the line containing
 @item window_end_valid
 This field is set to a non-zero value if @code{window_end_pos} and
 @code{window_end_vpos} are truly valid.  This is zero if nontrivial
-redisplay is pre-empted, since in that case the display that
+redisplay is preempted, since in that case the display that
 @code{window_end_pos} was computed for did not get onto the screen.
 
 @item cursor

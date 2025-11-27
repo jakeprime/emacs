@@ -1,6 +1,6 @@
 ;;; tramp-compat.el --- Tramp compatibility functions  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2007-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2025 Free Software Foundation, Inc.
 
 ;; Author: Michael Albinus <michael.albinus@gmx.de>
 ;; Keywords: comm, processes
@@ -38,26 +38,34 @@
 (require 'xdg)
 
 (declare-function tramp-error "tramp-message")
+(declare-function tramp-warning "tramp-message")
 (declare-function tramp-tramp-file-p "tramp")
 (defvar tramp-temp-name-prefix)
 
 (defconst tramp-compat-emacs-compiled-version (eval-when-compile emacs-version)
   "The Emacs version used for compilation.")
 
-(unless (= emacs-major-version
-	   (car (version-to-list tramp-compat-emacs-compiled-version)))
-  (warn "Tramp has been compiled with Emacs %s, this is Emacs %s"
-	tramp-compat-emacs-compiled-version emacs-version))
+(with-eval-after-load 'tramp
+  (unless (= emacs-major-version
+	     (car (version-to-list tramp-compat-emacs-compiled-version)))
+    (tramp-warning nil
+      "Tramp has been compiled with Emacs %s, this is Emacs %s"
+      tramp-compat-emacs-compiled-version emacs-version))
 
-(with-eval-after-load 'docker-tramp
-  (warn (concat "Package `docker-tramp' has been obsoleted, "
-		"please use integrated package `tramp-container'")))
-(with-eval-after-load 'kubernetes-tramp
-  (warn (concat "Package `kubernetes-tramp' has been obsoleted, "
-		"please use integrated package `tramp-container'")))
-(with-eval-after-load 'tramp-nspawn
-  (warn (concat "Package `tramp-nspawn' has been obsoleted, "
-		"please use integrated package `tramp-container'")))
+  (with-eval-after-load 'docker-tramp
+    (tramp-warning nil
+      (concat "Package `docker-tramp' has been obsoleted, "
+	      "please use integrated package `tramp-container'")))
+
+  (with-eval-after-load 'kubernetes-tramp
+    (tramp-warning nil
+      (concat "Package `kubernetes-tramp' has been obsoleted, "
+	      "please use integrated package `tramp-container'")))
+
+  (with-eval-after-load 'tramp-nspawn
+    (tramp-warning nil
+      (concat "Package `tramp-nspawn' has been obsoleted, "
+	      "please use integrated package `tramp-container'"))))
 
 ;; For not existing functions, obsolete functions, or functions with a
 ;; changed argument list, there are compiler warnings.  We want to
@@ -72,11 +80,10 @@
 ;; an infloop.  We try to follow the XDG specification, for security reasons.
 (defconst tramp-compat-temporary-file-directory
   (file-name-as-directory
-   (if-let ((xdg (xdg-cache-home))
-	    ((file-directory-p xdg))
-	    ((file-writable-p xdg)))
-       ;; We can use `file-name-concat' starting with Emacs 28.1.
-       (prog1 (setq xdg (concat (file-name-as-directory xdg) "emacs"))
+   (if-let* ((xdg (xdg-cache-home))
+	     ((file-directory-p xdg))
+	     ((file-writable-p xdg)))
+       (prog1 (setq xdg (expand-file-name "emacs" xdg))
 	 (make-directory xdg t))
      (eval (car (get 'temporary-file-directory 'standard-value)) t)))
   "The default value of `temporary-file-directory' for Tramp.")
@@ -252,10 +259,12 @@ Also see `ignore'."
       (tramp-error vec tramp-permission-denied file)
     (tramp-error vec tramp-permission-denied "Permission denied: %s" file)))
 
-;; Function `auth-info-password' is new in Emacs 29.1.
+;; Function `auth-info-password' is new in Emacs 29.1.  Finally,
+;; Bug#49289 is fixed in Emacs 30.1 for the `secrets' and `plstore'
+;; auth-sources backends.
 (defalias 'tramp-compat-auth-info-password
-  (if (fboundp 'auth-info-password)
-      #'auth-info-password
+  (if (>= emacs-major-version 30)
+      'auth-info-password
     (lambda (auth-info)
       (let ((secret (plist-get auth-info :secret)))
 	(while (functionp secret)
@@ -304,6 +313,12 @@ Also see `ignore'."
     (lambda (function sequence)
       (delq nil (seq-map function sequence)))))
 
+;; User option `connection-local-default-application' is new in Emacs 29.1.
+(unless (boundp 'connection-local-default-application)
+  (defvar connection-local-default-application 'tramp
+    "Default application in connection-local functions, a symbol.
+This variable must not be changed globally."))
+
 ;; User option `password-colon-equivalents' is new in Emacs 30.1.
 (if (boundp 'password-colon-equivalents)
     (defvaralias
@@ -329,9 +344,10 @@ If APPLICATION is nil, the value of
     (declare (debug (symbolp &optional form)))
     (unless (symbolp variable)
       (signal 'wrong-type-argument (list 'symbolp variable)))
-    `(let ((criteria
-            (connection-local-criteria-for-default-directory ,application))
-           connection-local-variables-alist file-local-variables-alist)
+    `(let* ((connection-local-default-application
+	     (or ,application connection-local-default-application))
+	    (criteria (connection-local-criteria-for-default-directory))
+            connection-local-variables-alist file-local-variables-alist)
        (when criteria
 	 (hack-connection-local-variables criteria)
 	 (and (assq ',variable connection-local-variables-alist) t)))))
@@ -348,13 +364,14 @@ value is the default binding of the variable."
     (declare (debug (symbolp &optional form)))
     (unless (symbolp variable)
       (signal 'wrong-type-argument (list 'symbolp variable)))
-    `(let ((criteria
-            (connection-local-criteria-for-default-directory ,application))
-           connection-local-variables-alist file-local-variables-alist)
+    `(let* ((connection-local-default-application
+	     (or ,application connection-local-default-application))
+	    (criteria (connection-local-criteria-for-default-directory))
+            connection-local-variables-alist file-local-variables-alist)
        (if (not criteria)
            ,variable
 	 (hack-connection-local-variables criteria)
-	 (if-let ((result (assq ',variable connection-local-variables-alist)))
+	 (if-let* ((result (assq ',variable connection-local-variables-alist)))
              (cdr result)
            ,variable)))))
 

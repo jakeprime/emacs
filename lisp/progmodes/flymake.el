@@ -1,9 +1,9 @@
 ;;; flymake.el --- A universal on-the-fly syntax checker  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2003-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2003-2025 Free Software Foundation, Inc.
 
 ;; Author: Pavel Kobyakov <pk_at_work@yahoo.com>
-;; Maintainer: João Távora <joaotavora@gmail.com>
+;; Maintainer: Spencer Baugh <sbaugh@janestreet.com>
 ;; Version: 1.3.7
 ;; Keywords: c languages tools
 ;; Package-Requires: ((emacs "26.1") (eldoc "1.14.0") (project "0.7.1"))
@@ -128,6 +128,11 @@
   :link '(custom-manual "(flymake) Top")
   :group 'tools)
 
+(add-to-list 'customize-package-emacs-version-alist
+             '(Flymake ("1.3.4" . "30.1")
+                       ("1.3.5" . "30.1")
+                       ("1.3.6" . "30.1")))
+
 (defcustom flymake-error-bitmap '(flymake-double-exclamation-mark
                                   compilation-error)
   "Bitmap (a symbol) used in the fringe for indicating errors.
@@ -180,22 +185,23 @@ See `flymake-error-bitmap' and `flymake-warning-bitmap'."
 		 (const right-fringe)
 		 (const :tag "No fringe indicators" nil)))
 
-(defcustom flymake-indicator-type (if (display-graphic-p)
-                                      'fringes
-                                    'margins)
+(defcustom flymake-indicator-type 'fringes
   "Indicate which indicator type to use for display errors.
 
 The value can be nil (don't indicate errors but just highlight them),
-fringes (use fringes) or margins (use margins)
+the symbol `fringes' (use fringes) or the symbol `margins' (use
+margins).
 
-Difference between fringes and margin is that fringes support diplaying
+Difference between fringes and margin is that fringes support displaying
 bitmaps on graphical displays and margins display text in a blank area
 from current buffer that works in both graphical and text displays.
+Thus, even when `fringes' is selected, margins will still be used on
+text displays and also when fringes are disabled.
 
 See Info node `Fringes' and Info node `(elisp)Display Margins'."
-  :version "30.1"
+  :version "30.2"
   :type '(choice (const :tag "Use Fringes" fringes)
-                 (const :tag "Use Margins "margins)
+                 (const :tag "Use Margins" margins)
                  (const :tag "No indicators" nil)))
 
 (defcustom flymake-margin-indicators-string
@@ -218,7 +224,7 @@ this is used."
                        (face :tag "Face"))))
 
 (defcustom flymake-autoresize-margins t
-  "If non-nil, automatically resize margin-width calling flymake--resize-margins.
+  "If non-nil, automatically resize margin-width calling `flymake--resize-margins'.
 
 Only relevant if `flymake-indicator-type' is set to margins."
   :version "30.1"
@@ -788,7 +794,7 @@ Return to original margin width if ORIG-WIDTH is non-nil."
                       left-margin-width 2)
         (setq-local flymake--original-margin-width right-margin-width
                     right-margin-width 2))))
-    ;; Apply margin to all windows avalaibles
+    ;; Apply margin to all windows available.
     (mapc (lambda (x)
             (set-window-buffer x (window-buffer x)))
           (get-buffer-window-list nil nil 'visible))))
@@ -1387,6 +1393,13 @@ special *Flymake log* buffer."  :group 'flymake :lighter
     (add-hook 'after-save-hook 'flymake-after-save-hook nil t)
     (add-hook 'kill-buffer-hook 'flymake-kill-buffer-hook nil t)
     (add-hook 'eldoc-documentation-functions 'flymake-eldoc-function t t)
+
+    (when (and (eq flymake-indicator-type 'fringes)
+               (not (cl-case flymake-fringe-indicator-position
+                      (left-fringe (< 0 (nth 0 (window-fringes))))
+                      (right-fringe (< 0 (nth 1 (window-fringes)))))))
+      ;; There are no fringes in the buffer, fallback to margins.
+      (setq-local flymake-indicator-type 'margins))
 
     ;; AutoResize margins.
     (flymake--resize-margins)

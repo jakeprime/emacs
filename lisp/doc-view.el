@@ -1,6 +1,6 @@
 ;;; doc-view.el --- Document viewer for Emacs -*- lexical-binding: t -*-
 
-;; Copyright (C) 2007-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2025 Free Software Foundation, Inc.
 ;;
 ;; Author: Tassilo Horn <tsdh@gnu.org>
 ;; Keywords: files, pdf, ps, dvi, djvu, epub, cbz, fb2, xps, openxps
@@ -51,7 +51,7 @@
 ;; subdirectory of `doc-view-cache-directory' and reused when you want to view
 ;; that file again.  To reconvert a document hit `g' (`doc-view-reconvert-doc')
 ;; when displaying the document.  To delete all cached files use
-;; `doc-view-clear-cache'.  To open the cache with dired, so that you can tidy
+;; `doc-view-clear-cache'.  To open the cache with Dired, so that you can tidy
 ;; it out use `doc-view-dired-cache'.
 ;;
 ;; When conversion is underway the first page will be displayed as soon as it
@@ -238,10 +238,15 @@ showing only titles and no page number."
   :type 'boolean
   :version "29.1")
 
-(defface doc-view-svg-face '((t :inherit default))
-  "Face used for SVG images.  Only background and foreground colors
-are used.
-See `doc-view-mupdf-use-svg'."
+(defface doc-view-svg-face '((t :inherit default
+                                :background "white"
+                                :foreground "black"))
+  "Face used for SVG images.
+See `doc-view-mupdf-use-svg'.
+
+Only background and foreground colors are used as the SVG image's
+descriptors; see (info \"(elisp) SVG Images\").  Custom values may
+cause low-contrast issues with certain documents."
   :version "30.1")
 
 (make-obsolete 'doc-view-svg-background 'doc-view-svg-face "30.1")
@@ -432,6 +437,15 @@ of the page moves to the previous page."
 
 (defun doc-view-new-window-function (winprops)
   ;; (message "New window %s for buf %s" (car winprops) (current-buffer))
+  ;;
+  ;; If the window configuration changed, `image-mode-reapply-winprops'
+  ;; will have erased any previous property list for this window, but
+  ;; without removing existing overlays for the same, so that they must
+  ;; be located and erased before a new overlay is created.
+  (dolist (tem (car (overlay-lists)))
+    (when (and (eq (overlay-get tem 'window) (car winprops))
+               (overlay-get tem 'doc-view))
+      (delete-overlay tem)))
   (cl-assert (or (eq t (car winprops))
                  (eq (window-buffer (car winprops)) (current-buffer))))
   (let ((ol (image-mode-window-get 'overlay winprops)))
@@ -1328,7 +1342,7 @@ is named like ODF with the extension turned to pdf."
   "Convert PDF-PS to PNG asynchronously."
   (funcall
    (pcase doc-view-doc-type
-     ((or 'pdf 'odf 'epub 'cbz 'fb2 'xps 'oxps)
+     ((or 'pdf 'odf 'epub 'cbz 'fb2 'xps 'oxps 'dvi)
       doc-view-pdf->png-converter-function)
      ('djvu #'doc-view-djvu->tiff-converter-ddjvu)
      (_ #'doc-view-ps->png-converter-ghostscript))
@@ -2148,6 +2162,8 @@ GOTO-PAGE-FN other than `doc-view-goto-page'."
   (pcase-let ((`(,conv-function ,type ,extension)
                (pcase doc-view-doc-type
                  ('djvu (list #'doc-view-djvu->tiff-converter-ddjvu 'tiff "tif"))
+                 ((or 'ps 'postscript 'eps)
+                  (list #'doc-view-ps->png-converter-ghostscript 'png "png"))
                  (_ (if (and (eq doc-view-pdf->png-converter-function
                                  #'doc-view-pdf->png-converter-mupdf)
                              doc-view-mupdf-use-svg)

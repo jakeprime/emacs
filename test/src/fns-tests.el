@@ -1,6 +1,6 @@
 ;;; fns-tests.el --- tests for src/fns.c  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2014-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2014-2025 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -277,7 +277,7 @@
   (should (string-collate-equalp "xyzzy" "XYZZY" nil t))
 
   ;; Locale must be valid.
-  (should-error (string-collate-equalp "xyzzy" "xyzzy" "en_XY.UTF-8")))
+  (should-error (string-collate-equalp "xyzzy" "xyzzy" 'not-a-locale)))
 
 ;; There must be a check for valid codepoints.  (Check not implemented yet)
 ;  (should-error

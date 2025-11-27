@@ -1,6 +1,6 @@
 ;;; loaddefs-gen.el --- generate loaddefs.el files  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2022-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2022-2025 Free Software Foundation, Inc.
 
 ;; Keywords: maint
 ;; Package: emacs
@@ -546,7 +546,7 @@ If COMPILE, don't include a \"don't compile\" cookie."
        file 'loaddefs-generate
        :title (concat "automatically extracted " (or type "autoloads"))
        :commentary (and (string-match "/lisp/loaddefs\\.el\\'" file)
-                        "This file will be copied to ldefs-boot.el and checked in periodically."))
+                        "This file will be copied to ldefs-boot.el and checked in periodically.  Note: When checking in ldefs-boot.el, don't include changes to any other files in the commit."))
       (when lp
         (insert "(add-to-list 'load-path (directory-file-name
                          (or (file-name-directory #$) (car load-path))))\n\n"))
@@ -591,7 +591,7 @@ instead of just updating them with the new/changed autoloads."
                        ;; we don't want to depend on whether Emacs was
                        ;; built with or without modules support, nor
                        ;; what is the suffix for the underlying OS.
-		       (unless (string-match "\\.\\(elc\\|so\\|dll\\)" suf)
+		       (unless (string-match "\\.\\(elc\\|so\\|dll\\|dylib\\)" suf)
                          (push suf tmp)))
                      (concat "\\`[^=.].*" (regexp-opt tmp t) "\\'")))
 	 (files (apply #'nconc

@@ -1,6 +1,6 @@
 @c -*- mode: texinfo; coding: utf-8 -*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990--1995, 1998--2024 Free Software Foundation, Inc.
+@c Copyright (C) 1990--1995, 1998--2025 Free Software Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @node Display
 @chapter Emacs Display
@@ -192,7 +192,9 @@ never used.)  Its value may be a string or an image (@pxref{Other
 Display Specs}), or a stretch of whitespace such as specified by the
 @code{:width} or @code{:align-to} display properties (@pxref{Specified
 Space}).  The value is interpreted in the same way as a @code{display}
-text property.  @xref{Display Property}.
+text property, with one important difference: the horizontal position
+specified by @code{:align-to} is measured from the visual beginning of
+the screen line.  @xref{Display Property}.
 
 A wrap prefix may also be specified for regions of text, using the
 @code{wrap-prefix} text or overlay property.  This takes precedence
@@ -929,6 +931,18 @@ won't appear at all.
   These variables are used by users to control what happens
 when a Lisp program reports a warning.
 
+@defopt warning-display-at-bottom
+This user option controls the window in which the warnings buffer is
+shown.  By default, the value is @code{t}, and Emacs displays the
+warnings buffer in a window at the bottom of the selected frame,
+creating a new window there if needed.  If customized to @code{nil}, the
+warnings buffer will be shown using the default rules of
+@code{display-buffer} (@pxref{Choosing Window}); in that case the
+@code{warning} category can be used in @code{display-buffer-alist} to
+customize how @code{display-buffer} will display these buffers
+(@pxref{Buffer Display Action Alists}).
+@end defopt
+
 @defopt warning-minimum-level
 This user option specifies the minimum severity level that should be
 shown immediately to the user, by popping the warnings buffer in some
@@ -1207,6 +1221,12 @@ want this to be done differently for a certain overlay, give it an
 The function is called with two arguments: the first is the overlay, and
 the second is @code{nil} to make the overlay visible, or @code{t} to
 make it invisible again.
+
+@cindex invisible text, and display properties
+  The @code{invisible} property is ignored in text that is covered by a
+@dfn{replacing} @code{display} property, because such @code{display}
+properties skip the text without processing its properties.
+@xref{Replacing Specs}.
 
 @node Selective Display
 @section Selective Display
@@ -1657,15 +1677,47 @@ overlay.
 @end defun
 
 @defun remove-overlays &optional start end name value
-This function removes all the overlays between @var{start} and
-@var{end} whose property @var{name} has the specified @var{value}.  It
-can move the endpoints of the overlays in the region, or split them.
+This function clears the text in the region between @var{start} and
+@var{end} of any overlays whose property named @var{name} has the
+specified @var{value}, such that no such overlay will affect the text in
+the region.  To do this, the function can remove overlays in the region,
+or move their endpoints, or split them, or do some combination of these.
+Specifically:
 
-If @var{name} is omitted or @code{nil}, it means to delete all overlays in
-the specified region.  If @var{start} and/or @var{end} are omitted or
-@code{nil}, that means the beginning and end of the buffer respectively.
-Therefore, @code{(remove-overlays)} removes all the overlays in the
-current buffer.
+@itemize @bullet
+@item
+Overlays that start at or after @var{start} and end before @var{end}
+will be removed completely.
+
+@item
+Overlays that start before @var{start} and end after @var{start}, but
+before @var{end}, will be altered so that they end at @var{start}.
+
+@item
+Overlays that start at or after @var{start} and end after @var{end} will
+be altered so that they start at @var{end}.
+
+@item
+Overlays that start before @var{start} and end after @var{end} will be
+split into two overlays: one that ends at @var{start} and the other that
+begins at @var{end}.
+@end itemize
+
+If @var{name} is omitted or @code{nil}, it means to delete/modify all
+overlays that affect text in the specified region.  If @var{start}
+and/or @var{end} are omitted or @code{nil}, they default to the
+beginning and end of the buffer, respectively.  Therefore,
+@code{(remove-overlays)} removes all the overlays in the current buffer.
+
+Values of the named overlay property are compared using @code{eq}, which
+is important if the values are anything but symbols or fixnums
+(@pxref{Equality Predicates}).  It means the values passed to the
+function must be the same values used to set the overlay property, not
+their copies; objects which are different will not compare equal even if
+they have identical contents.
+
+The optional arguments @var{name} and @var{value} should either both be
+passed and non-@code{nil}, or both omitted or @code{nil}.
 @end defun
 
 @defun copy-overlay overlay
@@ -1791,8 +1843,8 @@ overlay properties and text properties for a given character.
 of them:
 
 @table @code
-@item priority
 @kindex priority @r{(overlay property)}
+@item priority
 This property's value determines the priority of the overlay.  If you
 want to specify a priority value, use either @code{nil} (or zero), or
 a positive integer, or a cons of two values.  Any other value triggers
@@ -1831,19 +1883,19 @@ Currently, all overlays take priority over text properties.
 If you need to put overlays in priority order, use the @var{sorted}
 argument of @code{overlays-at}.  @xref{Finding Overlays}.
 
-@item window
 @kindex window @r{(overlay property)}
+@item window
 If the @code{window} property is non-@code{nil}, then the overlay
 applies only on that window.
 
-@item category
 @kindex category @r{(overlay property)}
+@item category
 If an overlay has a @code{category} property, we call it the
 @dfn{category} of the overlay.  It should be a symbol.  The properties
 of the symbol serve as defaults for the properties of the overlay.
 
-@item face
 @kindex face @r{(overlay property)}
+@item face
 This property controls the appearance of the text (@pxref{Faces}).
 The value of the property can be the following:
 
@@ -1871,37 +1923,39 @@ form is supported for backward compatibility only, and should be
 avoided.
 @end itemize
 
-@item mouse-face
 @kindex mouse-face @r{(overlay property)}
+@item mouse-face
 This property is used instead of @code{face} when the mouse is within
 the range of the overlay.  However, Emacs ignores all face attributes
 from this property that alter the text size (e.g., @code{:height},
 @code{:weight}, and @code{:slant}); those attributes are always the
 same as in the unhighlighted text.
 
-@item display
 @kindex display @r{(overlay property)}
+@item display
 This property activates various features that change the
 way text is displayed.  For example, it can make text appear taller
 or shorter, higher or lower, wider or narrower, or replaced with an image.
-@xref{Display Property}.
+@xref{Display Property}.  Note that, if the @code{display} property is a
+@dfn{replacing} one (@pxref{Replacing Specs}), the @code{invisible}
+property of the same overlay will be ignored.
 
-@item help-echo
 @kindex help-echo @r{(overlay property)}
+@item help-echo
 If an overlay has a @code{help-echo} property, then when you move the
 mouse onto the text in the overlay, Emacs displays a help string in
 the echo area, or as a tooltip.  For details see @ref{Text help-echo}.
 
-@item field
 @kindex field @r{(overlay property)}
+@item field
 @c Copied from Special Properties.
 Consecutive characters with the same @code{field} property constitute a
 @emph{field}.  Some motion functions including @code{forward-word} and
 @code{beginning-of-line} stop moving at a field boundary.
 @xref{Fields}.
 
-@item modification-hooks
 @kindex modification-hooks @r{(overlay property)}
+@item modification-hooks
 This property's value is a list of functions to be called if any
 character within the overlay is changed or if text is inserted strictly
 within the overlay.
@@ -1932,26 +1986,29 @@ prepare for that.  @xref{Change Hooks}.
 Text properties also support the @code{modification-hooks} property,
 but the details are somewhat different (@pxref{Special Properties}).
 
-@item insert-in-front-hooks
 @kindex insert-in-front-hooks @r{(overlay property)}
+@item insert-in-front-hooks
 This property's value is a list of functions to be called before and
 after inserting text right at the beginning of the overlay.  The calling
 conventions are the same as for the @code{modification-hooks} functions.
 
-@item insert-behind-hooks
 @kindex insert-behind-hooks @r{(overlay property)}
+@item insert-behind-hooks
 This property's value is a list of functions to be called before and
 after inserting text right at the end of the overlay.  The calling
 conventions are the same as for the @code{modification-hooks} functions.
 
-@item invisible
 @kindex invisible @r{(overlay property)}
+@item invisible
 The @code{invisible} property can make the text in the overlay
-invisible, which means that it does not appear on the screen.
-@xref{Invisible Text}, for details.
+invisible, which means that it does not appear on the screen.  However,
+if the text covered by the overlay has a @dfn{replacing} @code{display}
+property, the @code{invisible} property will be ignored, because a
+replacing @code{display} property skips the text without examining its
+properties.  @xref{Invisible Text}, for details.
 
-@item intangible
 @kindex intangible @r{(overlay property)}
+@item intangible
 The @code{intangible} property on an overlay works just like the
 @code{intangible} text property.  It is obsolete.  @xref{Special
 Properties}, for details.
@@ -1966,15 +2023,15 @@ Text}.
 This property tells incremental search how to make an invisible overlay
 visible, temporarily, during the search.  @xref{Invisible Text}.
 
-@item before-string
 @kindex before-string @r{(overlay property)}
+@item before-string
 This property's value is a string to add to the display at the beginning
 of the overlay.  The string does not appear in the buffer in any
 sense---only on the screen.  Note that if the text at the beginning of
 the overlay is made invisible, the string will not be displayed.
 
-@item after-string
 @kindex after-string @r{(overlay property)}
+@item after-string
 This property's value is a string to add to the display at the end of
 the overlay.  The string does not appear in the buffer in any
 sense---only on the screen.  Note that if the text at the end of the
@@ -1988,8 +2045,8 @@ non-continuation line at display-time.  @xref{Truncation}.
 This property specifies a display spec to prepend to each continuation
 line at display-time.  @xref{Truncation}.
 
-@item evaporate
 @kindex evaporate @r{(overlay property)}
+@item evaporate
 If this property is non-@code{nil}, the overlay is deleted automatically
 if it becomes empty (i.e., if its length becomes zero).  If you give
 an empty overlay (@pxref{Managing Overlays, empty overlay}) a
@@ -1998,9 +2055,18 @@ Note that, unless an overlay has this property, it will not be deleted
 when the text between its starting and ending positions is deleted
 from the buffer.
 
-@item keymap
+@kindex display-line-numbers-disable @r{(overlay property)}
+@item display-line-numbers-disable
+This property prevents display of line numbers (@pxref{Display Custom,
+display-line-numbers,, emacs, The GNU Emacs Manual}) for the text which
+is within an overlay having this property.  One situation where using an
+overlay with this property is useful is an empty overlay at
+end-of-buffer, since otherwise there's no way of preventing the display
+of the line number there.
+
 @cindex keymap of character (and overlays)
 @kindex keymap @r{(overlay property)}
+@item keymap
 If this property is non-@code{nil}, it specifies a keymap for a
 portion of the text.  This keymap takes precedence over most other
 keymaps (@pxref{Active Keymaps}), and it is used when point is within
@@ -2008,8 +2074,8 @@ the overlay, where the front-
 and rear-advance properties define whether the boundaries are
 considered as being @emph{within} or not.
 
-@item local-map
 @kindex local-map @r{(overlay property)}
+@item local-map
 The @code{local-map} property is similar to @code{keymap} but replaces the
 buffer's local map rather than augmenting existing keymaps.  This also means it
 has lower precedence than minor mode keymaps.
@@ -2204,7 +2270,7 @@ displayed in a given window.  This function is used by
 it contains.
 
 @defun window-text-pixel-size &optional window from to x-limit y-limit mode-lines ignore-line-at-end
-This function returns the size of the text of @var{window}'s buffer in
+This function returns the dimensions of the text of @var{window}'s buffer in
 pixels.  @var{window} must be a live window and defaults to the
 selected one.  The return value is a cons of the maximum pixel-width
 of any text line and the maximum pixel-height of all text lines.  This
@@ -2334,7 +2400,7 @@ though when this function is run from an idle timer with a delay of zero
 seconds.
 @end defun
 
-@defun buffer-text-pixel-size &optional buffer-or-name window from to x-limit y-limit
+@defun buffer-text-pixel-size &optional buffer-or-name window x-limit y-limit
 This is much like @code{window-text-pixel-size}, but can be used when
 the buffer isn't shown in a window.  (@code{window-text-pixel-size} is
 faster when it is, so this function shouldn't be used in that case.)
@@ -2345,15 +2411,23 @@ live window and defaults to the selected one; the function will
 compute the text dimensions as if @var{buffer} is displayed in
 @var{window}.  The return value is a cons of the maximum pixel-width
 of any text line and the pixel-height of all the text lines of the
-buffer specified by @var{buffer-or-name}.
+accessible portion of the buffer specified by @var{buffer-or-name}.
 
 The optional arguments @var{x-limit} and @var{y-limit} have the same
 meaning as with @code{window-text-pixel-size}.
+
+If you want to measure dimensions of some part of the buffer text,
+narrow the buffer to that part before calling this function
+(@pxref{Narrowing}).
 @end defun
 
 @defun string-pixel-width string
 This is a convenience function that uses @code{window-text-pixel-size}
-to compute the width of @var{string} (in pixels).
+to compute the width of @var{string} (in pixels).  Caveat: if you call
+this function to measure the width of a string with embedded newlines,
+it will then return the width of the widest substring that does not
+include newlines.  The meaning of this result is the widest line taken
+by the string if inserted into a buffer.
 @end defun
 
 @defun line-pixel-height
@@ -2729,7 +2803,7 @@ Draw a box with lines of width 1, in the foreground color.
 Draw a box with lines of width 1, in color @var{color}.
 
 @item @code{(:line-width (@var{vwidth} . @var{hwidth}) :color @var{color} :style @var{style})}
-You can explicitly specify all aspects of the box with a plist on this
+You can explicitly specify all aspects of the box with a plist of this
 form.  Any element in this plist can be omitted.
 
 The values of @var{vwidth} and @var{hwidth} specify respectively the
@@ -2737,7 +2811,7 @@ width of the vertical and horizontal lines to draw; they default to (1
 . 1).  A negative horizontal or vertical width @minus{}@var{n} means
 to draw a line of width @var{n} that occupies the space of the
 underlying text, thus avoiding any increase in the character height or
-width. For simplification the width could be specified with only a
+width.  For simplification the width could be specified with only a
 single number @var{n} instead of a list, such case is equivalent to
 @code{((abs @var{n}) . @var{n})}.
 
@@ -2756,7 +2830,11 @@ being pressed.  If it is @code{pressed-button}, the box looks like a
 If you use the @code{:box} face attribute on strings displayed instead
 of buffer text via the @code{display} text property, special
 considerations might apply if the surrounding buffer text also has the
-@code{:box} face attribute.  @xref{Replacing Specs}.
+@code{:box} face attribute.  @xref{Replacing Specs}.  Also note that the
+vertical lines of the box are only drawn when @code{:box} attribute
+changes from @code{nil} to non-@code{nil} or vice versa; two consecutive
+face properties with a non-@code{nil} @code{:box} attribute will be
+displayed without the vertical line between them.
 
 @item :inverse-video
 Whether or not characters should be displayed in inverse video.  The
@@ -3987,11 +4065,13 @@ in the range @var{from} and @var{to} (inclusive).
 @var{characters} may be a charset symbol (@pxref{Character Sets}).  In
 that case, use @var{font-spec} for all the characters in the charset.
 
+@vindex use-default-font-for-symbols
 @var{characters} may be a script symbol (@pxref{Character Properties,
 char-script-table}).  In that case, use @var{font-spec} for all the
 characters belonging to the script.  See also
 @code{use-default-font-for-symbols}, which affects font selection
-when @var{fontset} is @code{symbol}.
+when @var{characters} specify or belong to the @code{symbol} script
+(which includes symbol and punctuation characters).
 
 @var{characters} may be @code{nil}, which means to use @var{font-spec}
 for any character in @var{fontset} for which no font-spec is
@@ -4338,9 +4418,10 @@ should be equal to the value of @var{height} above.
 The width, in pixels, of the font's space character.
 
 @item average-width
-The average width of the font characters.  If this is zero, Emacs uses
-the value of @var{space-width} instead, when it calculates text layout
-on display.
+The average width of the font characters.  Emacs uses this for
+calculating text layout on display; if the value of @var{average-width}
+is zero, Emacs uses the value of @var{space-width} instead for those
+purposes.
 
 @item filename
 The file name of the font as a string.  This can be @code{nil} if the
@@ -5249,10 +5330,15 @@ instead of the text that has the property.  These are called
 to interactively move point into the middle of buffer text that is
 replaced in this way.
 
+@cindex display properties, and invisible text
+@cindex composition property, and replacing display specs
   If a list of display specifications includes more than one replacing
 display specification, the first overrides the rest.  Replacing
 display specifications make most other display specifications
-irrelevant, since those don't apply to the replacement.
+irrelevant, since those don't apply to the replacement.  In addition,
+any @code{invisible} and @code{composition} properties of the text that
+is replaced are ignored, because the replaced text is skipped and its
+properties are not processed.
 
   For replacing display specifications, @dfn{the text that has the
 property} means all the consecutive characters that have the same
@@ -5354,7 +5440,9 @@ Scrolling}), @var{hpos} is measured from the beginning of the logical
 line, not from the visual beginning of the screen line.  This way,
 alignment produced by @code{:align-to} is consistent with functions
 that count columns, such as @code{current-column} and
-@code{move-to-column} (@pxref{Columns}).
+@code{move-to-column} (@pxref{Columns}).  (There's a single exception
+from this rule: when @code{:align-to} is used to specify whitespace of
+the @code{wrap-prefix} variable or text property, @pxref{Truncation}.)
 @end table
 
   You should use one and only one of the above properties.  You can
@@ -5527,12 +5615,20 @@ instead of the text that has the display specification.
 
 @item (slice @var{x} @var{y} @var{width} @var{height})
 This specification together with @code{image} specifies a @dfn{slice}
-(a partial area) of the image to display.  The elements @var{y} and
-@var{x} specify the top left corner of the slice, within the image;
-@var{width} and @var{height} specify the width and height of the
-slice.  Integers are numbers of pixels.  A floating-point number
-in the range 0.0--1.0 stands for that fraction of the width or height
-of the entire image.
+(a partial area) of the image to display.  More precisely, the
+specification should have the following form:
+
+@lisp
+ ((slice @var{x} @var{y} @var{width} @var{height}) @var{image-desc})
+@end lisp
+
+@noindent
+where @var{image-desc} is an image descriptor described above.  The
+elements @var{x} and @var{y} specify the top left corner of the slice,
+within the image; @var{width} and @var{height} specify the width and
+height of the slice.  Integers are numbers of pixels.  A floating-point
+number in the range 0.0--1.0 stands for that fraction of the width or
+height of the entire image.
 
 @item ((margin nil) @var{string})
 A display specification of this form means to display @var{string}
@@ -5933,15 +6029,30 @@ parameters is a useful way of saying ``display this image as large as
 possible, but no larger than the available display area''.
 
 @item :scale @var{scale}
-This should be a number, where values higher than 1 means to increase
-the size, and lower means to decrease the size, by multiplying both
-the width and height.  For instance, a value of 0.25 will make the
-image a quarter size of what it originally was.  If the scaling makes
-the image larger than specified by @code{:max-width} or
-@code{:max-height}, the resulting size will not exceed those two
-values.  If both @code{:scale} and @code{:height}/@code{:width} are
-specified, the height/width will be adjusted by the specified scaling
-factor.
+This should be a scaling factor for the image, a number.  Values higher
+than 1 mean to increase the image size, and lower values mean to
+decrease the size, by multiplying both the width and height of the image
+by the factor.  For instance, a value of 0.25 will make the image a
+quarter size of what it originally was.  If the scaling makes the image
+larger than specified by @code{:max-width} or @code{:max-height}, the
+resulting size will not exceed those two values.  If both @code{:scale}
+and @code{:height}/@code{:width} are specified, the height/width will be
+adjusted by the specified scaling factor.
+
+@vindex image-scaling-factor
+The value of @var{scale} can also be the symbol @code{default}, which
+means to use the value of @code{image-scaling-factor}.  If that value is
+a number, it is the scale factor to use; if it is @code{auto} (the
+default), it means to compute the scaling factor based on pixel size of
+the font used by the frame's default face (@pxref{Low-Level Font}).
+Specifically, if the pixel width of the default face's font is greater
+than 10, the image is enlarged by the factor computed as the ratio of
+the font width to 10; if the font width is 10 pixels or less, the image
+is not scaled.  For example, if the default font's width is 15, the
+image will be scaled by the factor 1.5.
+
+If @var{scale} is not provided, @code{create-image} scales the image
+according to the value of @code{image-scaling-factor}.
 
 @item :rotation @var{angle}
 Specifies a rotation angle in degrees.  Only multiples of 90 degrees
@@ -5962,8 +6073,9 @@ is platform dependent, but should be equivalent to bilinear
 filtering.  Disabling smoothing will use the nearest neighbor
 algorithm.
 
+@vindex image-transform-smoothing
 If this property is not specified, @code{create-image} will use the
-@code{image-transform-smoothing} user option to say whether scaling
+@code{image-transform-smoothing} user option to say whether smoothing
 should be done or not.  This option can be @code{nil} (no smoothing),
 @code{t} (use smoothing) or a predicate function that's called with
 the image object as the only parameter, and should return either
@@ -6126,7 +6238,7 @@ or @code{:flip} is changed.
 If @code{:original-map} is not specified when creating an image with
 @code{create-image}, it will be computed based on the supplied
 @code{:map}, as well as any of @code{:scale}, @code{:rotation}, or
-@code{:flip} which are non-nil.
+@code{:flip} which are non-@code{nil}.
 
 Conversely, if @code{:original-map} is specified but @code{:map} is not,
 @code{:map} will be computed based on @code{:original-map},
@@ -6964,12 +7076,13 @@ Here is an example of using @code{image-load-path-for-library}:
 @end example
 @end defun
 
-@vindex image-scaling-factor
+@vindex image-scaling-factor, and automatic image scaling
 Images are automatically scaled when created based on the
 @code{image-scaling-factor} variable.  The value is either a floating
 point number (where numbers higher than 1 means to increase the size
 and lower means to shrink the size), or the symbol @code{auto}, which
-will compute a scaling factor based on the font pixel size.
+will compute a scaling factor based on the font pixel size.  @xref{Image
+Descriptors}.
 
 @node Showing Images
 @subsection Showing Images
@@ -7042,7 +7155,9 @@ buffer's text.
 
 Internally, this function creates an overlay, and gives it a
 @code{before-string} property containing text that has a @code{display}
-property whose value is the image.  (Whew! that was a mouthful@dots{})
+property whose value is the image.  (Whew! that was a mouthful@dots{}).
+It returns the created overlay upon success, and also sets its
+@code{put-image} property to @code{t}.
 @end defun
 
 @defun remove-images start end &optional buffer
@@ -7527,15 +7642,7 @@ This function causes the browser widget specified by @var{xwidget} to
 execute the specified JavaScript @code{script}.
 @end defun
 
-@defun xwidget-webkit-execute-script-rv xwidget script &optional default
-This function executes the specified @var{script} like
-@code{xwidget-webkit-execute-script} does, but it also returns the
-script's return value as a string.  If @var{script} doesn't return a
-value, this function returns @var{default}, or @code{nil} if
-@var{default} was omitted.
-@end defun
-
-@defun xwidget-webkit-get-title xwidget
+@defun xwidget-webkit-title xwidget
 This function returns the title of @var{xwidget} as a string.
 @end defun
 
@@ -7895,6 +8002,15 @@ function makes @var{string} into such a string, and @var{callback}
 will be called when the user clicks on the button.  The optional
 @var{data} parameter will be used as the parameter when @var{callback}
 is called.  If @code{nil}, the button is used as the parameter instead.
+@end defun
+
+@defun buttonize-region start end callback &optional data help-echo
+Sometimes it's more convenient to convert existing text in a buffer to a
+button instead of inserting new text.  This function makes the region
+between @var{start} and @var{end} into a button.  Arguments
+@var{callback} and @var{data} have the same meanings as for
+@code{buttonize}.  Optional argument @var{help-echo} is used as the
+@code{help-echo} property of the button.
 @end defun
 
 @node Manipulating Buttons

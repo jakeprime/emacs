@@ -1,6 +1,6 @@
 ;;; idlwave.el --- IDL editing mode for GNU Emacs  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1999-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2025 Free Software Foundation, Inc.
 
 ;; Authors: JD Smith <jd.smith@utoledo.edu>
 ;;          Carsten Dominik <dominik@science.uva.nl>
@@ -798,7 +798,7 @@ upper case, regardless of this variable."
 (defcustom idlwave-reserved-word-upcase nil
   "Non-nil means, reserved words will be made upper case via abbrev expansion.
 If nil case of reserved words is controlled by `idlwave-abbrev-change-case'.
-Has effect only if in abbrev-mode."
+Has effect only if in `abbrev-mode'."
   :group 'idlwave-abbrev-and-indent-action
   :type 'boolean)
 

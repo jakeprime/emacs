@@ -1,7 +1,7 @@
 ;;; project.el --- Operations on the current project  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2015-2024 Free Software Foundation, Inc.
-;; Version: 0.11.0
+;; Copyright (C) 2015-2025 Free Software Foundation, Inc.
+;; Version: 0.11.1
 ;; Package-Requires: ((emacs "26.1") (xref "1.7.0"))
 
 ;; This is a GNU ELPA :core package.  Avoid functionality that is not
@@ -331,7 +331,10 @@ end it with `/'.  DIR must be either `project-root' or one of
 The file names should be relative to the project root.  And this can
 only happen when all returned files are in the same directory.
 In other words, the DIRS argument of `project-files' has to be nil or a
-list of only one element.")
+list of only one element.
+
+This variable is only meant to be set by Lisp code, not customized by
+the user.")
 
 (cl-defgeneric project-files (project &optional dirs)
   "Return a list of files in directories DIRS in PROJECT.
@@ -540,61 +543,64 @@ project backend implementation of `project-external-roots'.")
 See `project-vc-extra-root-markers' for the marker value format.")
 
 (defun project-try-vc (dir)
-  ;; FIXME: Learn to invalidate when the value of
-  ;; `project-vc-merge-submodules' or `project-vc-extra-root-markers'
-  ;; changes.
+  ;; FIXME: Learn to invalidate when the value changes:
+  ;; `project-vc-merge-submodules' or `project-vc-extra-root-markers'.
   (or (vc-file-getprop dir 'project-vc)
-      (let* ((backend-markers
-              (delete
-               nil
-               (mapcar
-                (lambda (b) (assoc-default b project-vc-backend-markers-alist))
-                vc-handled-backends)))
-             (marker-re
-              (concat
-               "\\`"
-               (mapconcat
-                (lambda (m) (format "\\(%s\\)" (wildcard-to-regexp m)))
-                (append backend-markers
-                        (project--value-in-dir 'project-vc-extra-root-markers dir))
-                "\\|")
-               "\\'"))
-             (locate-dominating-stop-dir-regexp
-              (or vc-ignore-dir-regexp locate-dominating-stop-dir-regexp))
-             last-matches
-             (root
-              (locate-dominating-file
-               dir
-               (lambda (d)
-                 ;; Maybe limit count to 100 when we can drop Emacs < 28.
-                 (setq last-matches
-                       (condition-case nil
-                           (directory-files d nil marker-re t)
-                         (file-missing nil))))))
-             (backend
-              (cl-find-if
-               (lambda (b)
-                 (member (assoc-default b project-vc-backend-markers-alist)
-                         last-matches))
-               vc-handled-backends))
-             project)
-        (when (and
-               (eq backend 'Git)
-               (project--vc-merge-submodules-p root)
-               (project--submodule-p root))
-          (let* ((parent (file-name-directory (directory-file-name root))))
-            (setq root (vc-call-backend 'Git 'root parent))))
-        (when root
-          (when (not backend)
-            (let* ((project-vc-extra-root-markers nil)
-                   ;; Avoid submodules scan.
-                   (enable-dir-local-variables nil)
-                   (parent (project-try-vc root)))
-              (and parent (setq backend (nth 1 parent)))))
-          (setq project (list 'vc backend root))
-          ;; FIXME: Cache for a shorter time.
-          (vc-file-setprop dir 'project-vc project)
-          project))))
+      ;; FIXME: Cache for a shorter time.
+      (let ((res (project-try-vc--search dir)))
+        (and res (vc-file-setprop dir 'project-vc res))
+        res)))
+
+(defun project-try-vc--search (dir)
+  (let* ((backend-markers
+          (delete
+           nil
+           (mapcar
+            (lambda (b) (assoc-default b project-vc-backend-markers-alist))
+            vc-handled-backends)))
+         (marker-re
+          (concat
+           "\\`"
+           (mapconcat
+            (lambda (m) (format "\\(%s\\)" (wildcard-to-regexp m)))
+            (append backend-markers
+                    (project--value-in-dir 'project-vc-extra-root-markers dir))
+            "\\|")
+           "\\'"))
+         (locate-dominating-stop-dir-regexp
+          (or vc-ignore-dir-regexp locate-dominating-stop-dir-regexp))
+         last-matches
+         (root
+          (locate-dominating-file
+           dir
+           (lambda (d)
+             ;; Maybe limit count to 100 when we can drop Emacs < 28.
+             (setq last-matches
+                   (condition-case nil
+                       (directory-files d nil marker-re t)
+                     (file-missing nil))))))
+         (backend
+          (cl-find-if
+           (lambda (b)
+             (member (assoc-default b project-vc-backend-markers-alist)
+                     last-matches))
+           vc-handled-backends))
+         project)
+    (when (and
+           (eq backend 'Git)
+           (project--vc-merge-submodules-p root)
+           (project--submodule-p root))
+      (let* ((parent (file-name-directory (directory-file-name root))))
+        (setq root (vc-call-backend 'Git 'root parent))))
+    (when root
+      (when (not backend)
+        (let* ((project-vc-extra-root-markers nil)
+               ;; Avoid submodules scan.
+               (enable-dir-local-variables nil)
+               (parent (project-try-vc--search root)))
+          (and parent (setq backend (nth 1 parent)))))
+      (setq project (list 'vc backend root))
+      project)))
 
 (defun project--submodule-p (root)
   ;; XXX: We only support Git submodules for now.
@@ -714,10 +720,16 @@ See `project-vc-extra-root-markers' for the marker value format.")
                 (mapcar
                  (lambda (module)
                    (when (file-directory-p module)
-                     (project--vc-list-files
-                      (concat default-directory module)
-                      backend
-                      extra-ignores)))
+                     (let ((sub-files
+                            (project--vc-list-files
+                             (concat default-directory module)
+                             backend
+                             extra-ignores)))
+                       (if project-files-relative-names
+                           (mapcar (lambda (file)
+                                     (concat (file-name-as-directory module) file))
+                                   sub-files)
+                         sub-files))))
                  submodules)))
            (setq files
                  (apply #'nconc files sub-files))))
@@ -836,7 +848,9 @@ DIRS must contain directory names."
 (cl-defmethod project-buffers ((project (head vc)))
   (let* ((root (expand-file-name (file-name-as-directory (project-root project))))
          (modules (unless (or (project--vc-merge-submodules-p root)
-                              (project--submodule-p root))
+                              (condition-case nil
+                                  (project--submodule-p root)
+                                (file-missing nil)))
                     (mapcar
                      (lambda (m) (format "%s%s/" root m))
                      (project--git-submodules))))
@@ -995,7 +1009,7 @@ requires quoting, e.g. `\\[quoted-insert]<space>'."
               (project-files pr)
             (let* ((dir (read-directory-name "Base directory: "
                                              caller-dir nil t)))
-              (setq default-directory dir)
+              (setq default-directory (file-name-as-directory dir))
               (project--files-in-directory dir
                                            nil
                                            (grep-read-files regexp))))))
@@ -1544,6 +1558,16 @@ displayed."
   (interactive (list (project--read-project-buffer)))
   (display-buffer-other-frame buffer-or-name))
 
+(defcustom project-buffers-viewer 'project-list-buffers-buffer-menu
+  "Function to use in `project-list-buffers' to render the list.
+
+It should accept two arguments: PROJECT and FILES-ONLY.  The latter
+means that only file-visiting buffers should be displayed."
+  :group 'project
+  :version "30.1"
+  :type '(radio (function-item project-list-buffers-buffer-menu)
+                (function-item project-list-buffers-ibuffer)))
+
 ;;;###autoload
 (defun project-list-buffers (&optional arg)
   "Display a list of project buffers.
@@ -1553,27 +1577,32 @@ By default, all project buffers are listed except those whose names
 start with a space (which are for internal use).  With prefix argument
 ARG, show only buffers that are visiting files."
   (interactive "P")
-  (let* ((pr (project-current t))
-         (buffer-list-function
-          (lambda ()
-            (seq-filter
-             (lambda (buffer)
-               (let ((name (buffer-name buffer))
-                     (file (buffer-file-name buffer)))
-                 (and (or Buffer-menu-show-internal
-                          (not (string= (substring name 0 1) " "))
-                          file)
-                      (not (eq buffer (current-buffer)))
-                      (or file (not Buffer-menu-files-only)))))
-             (project-buffers pr)))))
+  (let ((pr (project-current t)))
+    (funcall project-buffers-viewer pr arg)))
+
+(defun project-list-buffers-buffer-menu (project &optional files-only)
+  "List buffers for PROJECT in Buffer-menu mode.
+If FILES-ONLY is non-nil, only show the file-visiting buffers."
+  (let ((buffer-list-function
+         (lambda ()
+           (seq-filter
+            (lambda (buffer)
+              (let ((name (buffer-name buffer))
+                    (file (buffer-file-name buffer)))
+                (and (or Buffer-menu-show-internal
+                         (not (string= (substring name 0 1) " "))
+                         file)
+                     (not (eq buffer (current-buffer)))
+                     (or file (not Buffer-menu-files-only)))))
+            (project-buffers project)))))
     (display-buffer
      (if (version< emacs-version "29.0.50")
          (let ((buf (list-buffers-noselect
-                     arg (with-current-buffer
-                             (get-buffer-create "*Buffer List*")
-                           (setq-local Buffer-menu-show-internal nil)
-                           (let ((Buffer-menu-files-only arg))
-                             (funcall buffer-list-function))))))
+                     files-only (with-current-buffer
+                                    (get-buffer-create "*Buffer List*")
+                                  (setq-local Buffer-menu-show-internal nil)
+                                  (let ((Buffer-menu-files-only files-only))
+                                    (funcall buffer-list-function))))))
            (with-current-buffer buf
              (setq-local revert-buffer-function
                          (lambda (&rest _ignored)
@@ -1581,7 +1610,16 @@ ARG, show only buffers that are visiting files."
                             (funcall buffer-list-function))
                            (tabulated-list-print t))))
            buf)
-       (list-buffers-noselect arg buffer-list-function)))))
+       (list-buffers-noselect files-only buffer-list-function)))))
+
+(defun project-list-buffers-ibuffer (project &optional files-only)
+  "List buffers for PROJECT using Ibuffer.
+If FILES-ONLY is non-nil, only show the file-visiting buffers."
+  (ibuffer t (format "*Ibuffer-%s*" (project-name project))
+           `((predicate . (and
+                           (or ,(not files-only) buffer-file-name)
+                           (member (current-buffer)
+                                   (project-buffers ',project)))))))
 
 (defcustom project-kill-buffer-conditions
   '(buffer-file-name    ; All file-visiting buffers are included.

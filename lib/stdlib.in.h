@@ -1,6 +1,7 @@
 /* A GNU-like <stdlib.h>.
 
-   Copyright (C) 1995, 2001-2004, 2006-2024 Free Software Foundation, Inc.
+   Copyright (C) 1995, 2001-2004, 2006-2025 Free Software Foundation,
+   Inc.
 
    This file is free software: you can redistribute it and/or modify
    it under the terms of the GNU Lesser General Public License as
@@ -25,6 +26,10 @@
    and inside some glibc header files, respectively.  */
 
 #@INCLUDE_NEXT@ @NEXT_STDLIB_H@
+
+/* Make sure that the macros that indicate the special invocation convention
+   get undefined.  This is needed at least on CentOS 7.  */
+#undef __need_malloc_and_calloc
 
 #else
 /* Normal invocation convention.  */

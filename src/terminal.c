@@ -1,5 +1,5 @@
 /* Functions related to terminal devices.
-   Copyright (C) 2005-2024 Free Software Foundation, Inc.
+   Copyright (C) 2005-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -22,6 +22,7 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #include "character.h"
 #include "frame.h"
 #include "termchar.h"
+#include "blockinput.h"
 #include "termhooks.h"
 #include "keyboard.h"
 
@@ -316,6 +317,9 @@ delete_terminal (struct terminal *terminal)
      delete_terminal_hook when we delete our last frame.  */
   if (!terminal->name)
     return;
+
+  /* Protection while we are in inconsistent state.  */
+  block_input ();
   xfree (terminal->name);
   terminal->name = NULL;
 
@@ -331,6 +335,7 @@ delete_terminal (struct terminal *terminal)
     }
 
   delete_terminal_internal (terminal);
+  unblock_input ();
 }
 
 void

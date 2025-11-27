@@ -1,6 +1,6 @@
 @c -*-texinfo-*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990--1995, 1998--1999, 2001--2024 Free Software
+@c Copyright (C) 1990--1995, 1998--1999, 2001--2025 Free Software
 @c Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @node Searching and Matching
@@ -616,7 +616,10 @@ This matches horizontal whitespace, as defined by Annex C of the
 Unicode Technical Standard #18.  In particular, it matches spaces,
 tabs, and other characters whose Unicode @samp{general-category}
 property (@pxref{Character Properties}) indicates they are spacing
-separators.
+separators.  (If you only need to look for ASCII whitespace characters,
+we suggest using an explicit set of character alternatives, such as
+@w{@samp{[ \t]}}, instead, as it will be faster than
+@code{[[:blank:]]}.)
 @item [:cntrl:]
 This matches any character whose code is in the range 0--31.
 @item [:digit:]
@@ -1028,13 +1031,13 @@ programming language:
 
 @example
 @group
-(rx "/*"                          ; Initial /*
+(rx "/*"                    ; Initial /*
     (zero-or-more
-     (or (not (any "*"))          ;  Either non-*,
-         (seq "*"                 ;  or * followed by
-              (not (any "/")))))  ;  non-/
-    (one-or-more "*")             ; At least one star,
-    "/")                          ; and the final /
+     (or (not "*")          ;  Either non-*,
+         (seq "*"           ;  or * followed by
+              (not "/"))))  ;     non-/
+    (one-or-more "*")       ; At least one star,
+    "/")                    ; and the final /
 @end group
 @end example
 
@@ -1771,7 +1774,7 @@ required for @code{rx-to-string} to work.  Example:
 
 Another difference from @code{rx-let} is that the @var{bindings} are
 dynamically scoped, and thus also available in functions called from
-@var{body}. However, they are not visible inside functions defined in
+@var{body}.  However, they are not visible inside functions defined in
 @var{body}.
 @end defmac
 
@@ -1835,7 +1838,7 @@ The optional argument @var{paren} can be any of the following:
 @table @asis
 @item a string
 The resulting regexp is preceded by @var{paren} and followed by
-@samp{\)}, e.g. use @samp{"\\(?1:"} to produce an explicitly
+@samp{\)}.  For example, use @samp{"\\(?1:"} to produce an explicitly
 numbered group.
 
 @item @code{words}
@@ -1919,7 +1922,7 @@ symptoms less likely and help alleviate problems that do arise.
 @itemize
 @item
 Anchor regexps at the beginning of a line, string or buffer using
-zero-width assertions (@samp{^} and @code{\`}). This takes advantage
+zero-width assertions (@samp{^} and @code{\`}).  This takes advantage
 of fast paths in the implementation and can avoid futile matching
 attempts.  Other zero-width assertions may also bring benefits by
 causing a match to fail early.
@@ -1977,7 +1980,7 @@ To help diagnose problems in your regexps or in the regexp engine
 itself, this function returns a string describing the compiled
 form of @var{regexp}.  To make sense of it, it can be necessary
 to read at least the description of the @code{re_opcode_t} type in the
-@code{src/regex-emacs.c} file in Emacs' source code.
+@code{src/regex-emacs.c} file in Emacs's source code.
 
 It is currently able to give a meaningful description only if Emacs
 was compiled with @code{--enable-checking}.
@@ -2216,7 +2219,11 @@ this regular expression.  However, spaces inside of constructs such as
 
 Since this variable affects all regular expression search and match
 constructs, you should bind it temporarily for as small as possible
-a part of the code.
+a part of the code, and only where the Lisp code affected by the
+binding performs searches whose regexp was produced from interactive
+user input.  In other words, this variable should only be used to tell
+regexp search primitives how to interpret whitespace typed by the
+user.
 @end defvar
 
 @node Longest Match

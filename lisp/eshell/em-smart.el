@@ -1,6 +1,6 @@
 ;;; em-smart.el --- smart display of output  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2025 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 
@@ -70,7 +70,7 @@
 
 (require 'esh-mode)
 
-;;;###autoload
+;;;###esh-module-autoload
 (progn
 (defgroup eshell-smart nil
   "This module combines the facility of normal, modern shells with
@@ -150,7 +150,7 @@ buffer using \\[end-of-buffer]."
   :group 'eshell-smart)
 
 (defcustom eshell-where-to-jump 'begin
-  "This variable indicates where point should jump to after a command.
+  "The location where point should jump to after a command.
 The options are `begin', `after' or `end'."
   :type '(radio (const :tag "Beginning of command" begin)
 		(const :tag "After command word" after)
@@ -303,9 +303,4 @@ and the end of the buffer are still visible."
   (remove-hook 'window-configuration-change-hook #'eshell-smart-scroll))
 
 (provide 'em-smart)
-
-;; Local Variables:
-;; generated-autoload-file: "esh-groups.el"
-;; End:
-
 ;;; em-smart.el ends here

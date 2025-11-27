@@ -1,6 +1,6 @@
 ;;; tramp-message.el --- Tramp messages  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2023-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2023-2025 Free Software Foundation, Inc.
 
 ;; Author: Michael Albinus <michael.albinus@gmx.de>
 ;; Keywords: comm, processes
@@ -53,6 +53,8 @@
 (declare-function tramp-file-name-host-port "tramp")
 (declare-function tramp-file-name-user-domain "tramp")
 (declare-function tramp-get-default-directory "tramp")
+(defvar tramp-repository-branch)
+(defvar tramp-repository-version)
 
 ;;;###tramp-autoload
 (defcustom tramp-verbose 3
@@ -127,7 +129,7 @@ The outline level is equal to the verbosity of the Tramp message."
 ;; `command-completion-default-include-p'.
 (defun tramp-debug-buffer-command-completion-p (_symbol buffer)
   "A predicate for Tramp interactive commands.
-They are completed by \"M-x TAB\" only in Tramp debug buffers."
+They are completed by `M-x TAB' only in Tramp debug buffers."
   (declare (tramp-suppress-trace t))
   (with-current-buffer buffer
     (string-equal
@@ -357,7 +359,9 @@ This function is meant for debugging purposes."
   (let ((tramp-verbose (if force 10 tramp-verbose)))
     (when (>= tramp-verbose 10)
       (tramp-message
-       vec-or-proc 10 "\n%s" (with-output-to-string (backtrace))))))
+       ;; In batch-mode, we want to see it on stderr.
+       vec-or-proc (if (and force noninteractive) 1 10)
+       "\n%s" (with-output-to-string (backtrace))))))
 
 (defsubst tramp-error (vec-or-proc signal fmt-string &rest arguments)
   "Emit an error.
@@ -420,7 +424,7 @@ an input event arrives.  The other arguments are passed to `tramp-error'."
 	    ;; Show buffer.
 	    (pop-to-buffer buf)
 	    (discard-input)
-	    (sit-for tramp-error-show-message-timeout)))
+	    (sit-for tramp-error-show-message-timeout 'nodisp)))
 	;; Reset timestamp.  It would be wrong after waiting for a while.
 	(when (tramp-file-name-equal-p vec (car tramp-current-connection))
 	  (setcdr tramp-current-connection (current-time)))))))
@@ -442,7 +446,7 @@ an input event arrives.  The other arguments are passed to `tramp-error'."
 	;; `tramp-error' does not show messages.  So we must do it ourselves.
 	(apply #'message fmt-string arguments)
 	(discard-input)
-	(sit-for tramp-error-show-message-timeout)
+	(sit-for tramp-error-show-message-timeout 'nodisp)
 	;; Reset timestamp.  It would be wrong after waiting for a while.
 	(when
 	    (tramp-file-name-equal-p vec-or-proc (car tramp-current-connection))
@@ -463,11 +467,10 @@ the resulting error message."
   "Show a warning.
 VEC-OR-PROC identifies the connection to use, remaining arguments passed
 to `tramp-message'."
-  (declare (tramp-suppress-trace t))
+  (declare (indent 1) (tramp-suppress-trace t))
   (let (signal-hook-function)
     (apply 'tramp-message vec-or-proc 2 fmt-string arguments)
-    (display-warning
-     'tramp (apply #'format-message fmt-string arguments) :warning)))
+    (apply 'lwarn 'tramp :warning fmt-string arguments)))
 
 (defun tramp-test-message (fmt-string &rest arguments)
   "Emit a Tramp message according `default-directory'."
@@ -485,7 +488,7 @@ to `tramp-message'."
   "Goto the linked message in debug buffer at place."
   (declare (tramp-suppress-trace t))
   (when (mouse-event-p last-input-event) (mouse-set-point last-input-event))
-  (when-let ((point (button-get button 'position)))
+  (when-let* ((point (button-get button 'position)))
     (goto-char point)))
 
 (define-button-type 'tramp-debug-button-type

@@ -1,6 +1,6 @@
 ;;; eshell.el --- the Emacs command shell  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2025 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 ;; Version: 2.4.2
@@ -256,14 +256,26 @@ information on Eshell, see Info node `(eshell)Top'."
       (eshell-mode))
     buf))
 
+(declare-function eshell-add-input-to-history "em-hist" (input))
+(declare-function eshell--save-history "em-hist" ())
+
+(defun eshell-command-mode-exit ()
+  "Exit the `eshell-commad-mode' minibuffer and save Eshell history."
+  (interactive)
+  (when (eshell-using-module 'eshell-hist)
+    (eshell-add-input-to-history
+     (buffer-substring (minibuffer-prompt-end) (point-max)))
+    (eshell--save-history))
+  (exit-minibuffer))
+
 (define-minor-mode eshell-command-mode
   "Minor mode for `eshell-command' input.
 \\{eshell-command-mode-map}"
   :keymap (let ((map (make-sparse-keymap)))
-            (define-key map [(control ?g)] 'abort-recursive-edit)
-            (define-key map [(control ?m)] 'exit-minibuffer)
-            (define-key map [(control ?j)] 'exit-minibuffer)
-            (define-key map [(meta control ?m)] 'exit-minibuffer)
+            (define-key map [(control ?g)] #'abort-recursive-edit)
+            (define-key map [(control ?m)] #'eshell-command-mode-exit)
+            (define-key map [(control ?j)] #'eshell-command-mode-exit)
+            (define-key map [(meta control ?m)] #'eshell-command-mode-exit)
             map))
 
 (define-obsolete-function-alias 'eshell-return-exits-minibuffer
@@ -281,10 +293,7 @@ information on Eshell, see Info node `(eshell)Top'."
     (minibuffer-with-setup-hook (lambda ()
                                   (eshell-mode)
                                   (eshell-command-mode +1))
-      (let ((command (read-from-minibuffer prompt)))
-        (when (eshell-using-module 'eshell-hist)
-          (eshell-add-input-to-history command))
-        command))))
+      (read-from-minibuffer prompt))))
 
 ;;;###autoload
 (defun eshell-command (command &optional to-current-buffer)

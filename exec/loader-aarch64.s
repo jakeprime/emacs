@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Free Software Foundation, Inc.
+// Copyright (C) 2023-2025 Free Software Foundation, Inc.
 //
 // This file is part of GNU Emacs.
 //
@@ -168,7 +168,7 @@ _start:
 	b	.one_auxv
 .cleanup:
 	cmp	x28, #-1		// is secondary fd set?
-	bne	.cleanup1		// not set
+	beq	.cleanup1		// not set
 	mov	x8, #57			// SYS_close
 	mov	x0, x28			// secondary fd
 	svc	#0			// syscall

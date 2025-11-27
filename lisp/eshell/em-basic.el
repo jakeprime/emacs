@@ -1,6 +1,6 @@
 ;;; em-basic.el --- basic shell builtin commands  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2025 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 
@@ -58,7 +58,7 @@
 (require 'esh-opt)
 (require 'esh-util)
 
-;;;###autoload
+;;;###esh-module-autoload
 (progn
 (defgroup eshell-basic nil
   "The \"basic\" code provides a set of convenience functions which
@@ -225,9 +225,4 @@ are:
   (while (pcomplete-here '("error" "form" "process"))))
 
 (provide 'em-basic)
-
-;; Local Variables:
-;; generated-autoload-file: "esh-groups.el"
-;; End:
-
 ;;; em-basic.el ends here

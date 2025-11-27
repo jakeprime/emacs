@@ -1,6 +1,6 @@
 /* Fully extensible Emacs, running on Unix, intended for GNU.
 
-Copyright (C) 1985-1987, 1993-1995, 1997-1999, 2001-2024 Free Software
+Copyright (C) 1985-1987, 1993-1995, 1997-1999, 2001-2025 Free Software
 Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -194,7 +194,7 @@ bool inhibit_window_system;
    data on the first attempt to change it inside asynchronous code.  */
 bool running_asynch_code;
 
-#if defined (HAVE_X_WINDOWS) || defined (HAVE_NS)
+#if defined (HAVE_X_WINDOWS) || defined (HAVE_PGTK) || defined (HAVE_NS)
 /* If true, -d was specified, meaning we're using some window system.  */
 bool display_arg;
 #endif
@@ -1406,6 +1406,10 @@ main (int argc, char **argv)
      the additional call here is harmless.) */
   cache_system_info ();
 #ifdef WINDOWSNT
+  /* This must be called to initialize w32_unicode_filenames and
+     is_windows_9x prior to w32_init_current_directory.  */
+  globals_of_w32 ();
+
   /* On Windows 9X, we have to load UNICOWS.DLL as early as possible,
      to have non-stub implementations of APIs we need to convert file
      names between UTF-8 and the system's ANSI codepage.  */
@@ -1426,7 +1430,18 @@ main (int argc, char **argv)
 
 #ifdef HAVE_PDUMPER
   if (attempt_load_pdump)
-    initial_emacs_executable = load_pdump (argc, argv, dump_file);
+    {
+      initial_emacs_executable = load_pdump (argc, argv, dump_file);
+#ifdef WINDOWSNT
+  /* Reinitialize the codepage for file names, needed to decode
+     non-ASCII file names during startup.  This is needed because
+     loading the pdumper file above assigns to those variables values
+     from the dump stage, which might be incorrect, if dumping was done
+     on a different system.  */
+      if (dumped_with_pdumper_p ())
+	w32_init_file_name_codepage ();
+#endif
+    }
 #else
   ptrdiff_t bufsize;
   initial_emacs_executable = find_emacs_executable (argv[0], &bufsize);
@@ -1517,11 +1532,10 @@ main (int argc, char **argv)
         }
     }
 #endif
-
   emacs_wd = emacs_get_current_dir_name ();
 #ifdef WINDOWSNT
   initial_wd = emacs_wd;
-#endif
+#endif /* WINDOWSNT */
 #ifdef HAVE_PDUMPER
   if (dumped_with_pdumper_p ())
     pdumper_record_wd (emacs_wd);
@@ -2082,7 +2096,7 @@ Using an Emacs configured with --with-x-toolkit=lucid does not have this problem
   {
     int count_before = skip_args;
 
-#ifdef HAVE_X_WINDOWS
+#if defined (HAVE_X_WINDOWS) || defined (HAVE_PGTK)
     char *displayname = 0;
 
     /* Skip any number of -d options, but only use the last one.  */
@@ -2176,7 +2190,10 @@ Using an Emacs configured with --with-x-toolkit=lucid does not have this problem
   init_atimer ();
 
 #ifdef WINDOWSNT
-  globals_of_w32 ();
+  /* We need to forget about libraries that were loaded during the
+     dumping process (e.g. libgccjit).  This must be done _after_
+     load_pdump.  */
+  Vlibrary_cache = Qnil;
 #ifdef HAVE_W32NOTIFY
   globals_of_w32notify ();
 #endif
@@ -2358,6 +2375,11 @@ Using an Emacs configured with --with-x-toolkit=lucid does not have this problem
 #ifdef HAVE_WINDOW_SYSTEM
       syms_of_fringe ();
       syms_of_image ();
+#ifdef HAVE_NTGUI
+# if HAVE_NATIVE_IMAGE_API
+      syms_of_w32image ();
+# endif
+#endif	/* HAVE_NTGUI */
 #endif /* HAVE_WINDOW_SYSTEM */
 #ifdef HAVE_X_WINDOWS
       syms_of_xterm ();
@@ -2495,6 +2517,9 @@ Using an Emacs configured with --with-x-toolkit=lucid does not have this problem
       globals_of_w32font ();
       globals_of_w32fns ();
       globals_of_w32menu ();
+# if HAVE_NATIVE_IMAGE_API
+      globals_of_w32image ();
+# endif
 #endif  /* HAVE_NTGUI */
 
 #if defined WINDOWSNT || defined HAVE_NTGUI
@@ -2928,7 +2953,8 @@ Emacs process, using the same command line arguments as the currently
 running Emacs process.
 
 This function is called upon receipt of the signals SIGTERM
-or SIGHUP, and upon SIGINT in batch mode.
+or SIGHUP, and upon SIGINT in batch mode.  (Other fatal signals
+shut down Emacs without calling this function.)
 
 The value of `kill-emacs-hook', if not void, is a list of functions
 (of no args), all of which are called before Emacs is actually
@@ -3588,7 +3614,7 @@ Special values:
   `windows-nt'   compiled as a native W32 application.
   `cygwin'       compiled using the Cygwin library.
   `haiku'        compiled for a Haiku system.
-  `android'	 compiled for Android.
+  `android'      compiled for Android.
 Anything else (in Emacs 26, the possibilities are: aix, berkeley-unix,
 hpux, usg-unix-v) indicates some sort of Unix system.  */);
   Vsystem_type = intern_c_string (SYSTEM_TYPE);

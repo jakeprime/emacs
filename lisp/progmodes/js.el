@@ -1,6 +1,6 @@
 ;;; js.el --- Major mode for editing JavaScript  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2008-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2025 Free Software Foundation, Inc.
 
 ;; Author: Karl Landstrom <karl.landstrom@brgeight.se>
 ;;         Daniel Colascione <dancol@dancol.org>
@@ -2493,7 +2493,7 @@ Returns t if successful, nil if no term was found."
       t)))
 
 (defun js--chained-expression-p ()
-  "A helper for js--proper-indentation that handles chained expressions.
+  "Helper for `js--proper-indentation' that handles chained expressions.
 A chained expression is when the current line starts with '.' and the
 previous line also has a '.' expression.
 This function returns the indentation for the current line if it is
@@ -3634,7 +3634,33 @@ Check if a node type is available, then return the right indent rules."
    :language 'javascript
    :feature 'escape-sequence
    :override t
-   '((escape_sequence) @font-lock-escape-face))
+   '((escape_sequence) @font-lock-escape-face)
+
+   ;; "document" should be first, to avoid overlap.
+   :language 'jsdoc
+   :override t
+   :feature 'document
+   '((document) @font-lock-doc-face)
+
+   :language 'jsdoc
+   :override t
+   :feature 'keyword
+   '((tag_name) @font-lock-constant-face)
+
+   :language 'jsdoc
+   :override t
+   :feature 'bracket
+   '((["{" "}"]) @font-lock-bracket-face)
+
+   :language 'jsdoc
+   :override t
+   :feature 'property
+   '((type) @font-lock-type-face)
+
+   :language 'jsdoc
+   :override t
+   :feature 'definition
+   '((identifier) @font-lock-variable-name-face))
   "Tree-sitter font-lock settings.")
 
 (defun js--fontify-template-string (node override start end &rest _)
@@ -3829,6 +3855,8 @@ See `treesit-thing-settings' for more information.")
 
 (defvar js--treesit-sexp-nodes
   '("expression"
+    "parenthesized_expression"
+    "formal_parameters"
     "pattern"
     "array"
     "function"
@@ -3846,9 +3874,17 @@ See `treesit-thing-settings' for more information.")
     "undefined"
     "arguments"
     "pair"
-    "jsx")
+    "jsx"
+    "statement_block"
+    "object"
+    "object_pattern"
+    "named_imports"
+    "class_body")
   "Nodes that designate sexps in JavaScript.
 See `treesit-thing-settings' for more information.")
+
+(defvar js--treesit-jsdoc-beginning-regexp (rx bos "/**")
+  "Regular expression matching the beginning of a jsdoc block comment.")
 
 ;;;###autoload
 (define-derived-mode js-ts-mode js-base-mode "JavaScript"
@@ -3875,11 +3911,11 @@ See `treesit-thing-settings' for more information.")
     (setq-local syntax-propertize-function #'js-ts--syntax-propertize)
 
     ;; Tree-sitter setup.
-    (treesit-parser-create 'javascript)
+    (setq-local treesit-primary-parser (treesit-parser-create 'javascript))
+
     ;; Indent.
     (setq-local treesit-simple-indent-rules js--treesit-indent-rules)
     ;; Navigation.
-    (setq-local treesit-defun-prefer-top-level t)
     (setq-local treesit-defun-type-regexp
                 (rx (or "class_declaration"
                         "method_definition"
@@ -3889,19 +3925,30 @@ See `treesit-thing-settings' for more information.")
 
     (setq-local treesit-thing-settings
                 `((javascript
-                   (sexp ,(regexp-opt js--treesit-sexp-nodes))
-                   (sentence ,(regexp-opt js--treesit-sentence-nodes))
-                   (text ,(regexp-opt '("comment"
-                                        "template_string"))))))
+                   (sexp ,(js--regexp-opt-symbol js--treesit-sexp-nodes))
+                   (sentence ,(js--regexp-opt-symbol js--treesit-sentence-nodes))
+                   (text ,(js--regexp-opt-symbol '("comment"
+                                                   "template_string"))))))
 
     ;; Fontification.
     (setq-local treesit-font-lock-settings js--treesit-font-lock-settings)
     (setq-local treesit-font-lock-feature-list
-                '(( comment definition)
+                '(( comment document definition)
                   ( keyword string)
                   ( assignment constant escape-sequence jsx number
                     pattern string-interpolation)
                   ( bracket delimiter function operator property)))
+
+    (when (treesit-ready-p 'jsdoc t)
+      (setq-local treesit-range-settings
+                  (treesit-range-rules
+                   :embed 'jsdoc
+                   :host 'javascript
+                   :local t
+                   `(((comment) @capture (:match ,js--treesit-jsdoc-beginning-regexp @capture)))))
+
+      (setq c-ts-common--comment-regexp (rx (or "comment" "line_comment" "block_comment" "description"))))
+
     ;; Imenu
     (setq-local treesit-simple-imenu-settings
                 `(("Function" "\\`function_declaration\\'" nil nil)
@@ -3914,7 +3961,7 @@ See `treesit-thing-settings' for more information.")
     (treesit-major-mode-setup)
 
     (add-to-list 'auto-mode-alist
-                 '("\\(\\.js[mx]\\|\\.har\\)\\'" . js-ts-mode))))
+                 '("\\(\\.js[mx]?\\|\\.har\\)\\'" . js-ts-mode))))
 
 (derived-mode-add-parents 'js-ts-mode '(js-mode))
 

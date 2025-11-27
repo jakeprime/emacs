@@ -1,6 +1,6 @@
 ;;; isearch.el --- incremental search minor mode -*- lexical-binding: t -*-
 
-;; Copyright (C) 1992-1997, 1999-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1992-1997, 1999-2025 Free Software Foundation, Inc.
 
 ;; Author: Daniel LaLiberte <liberte@cs.uiuc.edu>
 ;; Maintainer: emacs-devel@gnu.org
@@ -1003,8 +1003,7 @@ Each element is an `isearch--state' struct where the slots are
 ;; Entry points to isearch-mode.
 
 (defun isearch-forward (&optional regexp-p no-recursive-edit)
-  "\
-Do incremental search forward.
+  "Do incremental search forward.
 With a prefix argument, do an incremental regular expression search instead.
 \\<isearch-mode-map>
 As you type characters, they add to the search string and are found.
@@ -1012,7 +1011,7 @@ The following non-printing keys are bound in `isearch-mode-map'.
 
 Type \\[isearch-delete-char] to cancel last input item from end of search string.
 Type \\[isearch-exit] to exit, leaving point at location found.
-Type LFD (C-j) to match end of line.
+Type LFD (\\`C-j') to match end of line.
 Type \\[isearch-repeat-forward] to search again forward,\
  \\[isearch-repeat-backward] to search again backward.
 Type \\[isearch-beginning-of-buffer] to go to the first match,\
@@ -1110,7 +1109,7 @@ as a regexp.  See the command `isearch-forward' for more information.
 
 In incremental searches, a space or spaces normally matches any
 whitespace defined by the variable `search-whitespace-regexp'.
-To search for a literal space and nothing else, enter C-q SPC.
+To search for a literal space and nothing else, enter \\`C-q SPC'.
 To toggle whitespace matching, use `isearch-toggle-lax-whitespace',
 usually bound to \\`M-s SPC' during isearch.
 This command does not support character folding."
@@ -3048,11 +3047,11 @@ See also the related option `isearch-allow-motion'."
 
 (defcustom isearch-allow-motion nil
   "Whether to allow movement between isearch matches by cursor motion commands.
-If non-nil, the four motion commands \\[beginning-of-buffer], \\[end-of-buffer], \
-\\[scroll-up-command] and \\[scroll-down-command], when invoked during
-Isearch, move respectively to the first occurrence of the current search string
-in the buffer, the last one, the first one after the current window, and the
-last one before the current window.
+If non-nil, the four motion commands \\<isearch-mode-map>\\[beginning-of-buffer], \\[end-of-buffer], \
+\\[scroll-up-command] and \\[scroll-down-command], when invoked
+during Isearch, move respectively to the first occurrence of the current
+search string in the buffer, the last one, the first one after the current
+window, and the last one before the current window.
 If nil, these motion commands normally exit Isearch and are executed.
 See also the related options `isearch-motion-changes-direction' and
 `isearch-allow-scroll'."
@@ -3065,8 +3064,8 @@ See also the related options `isearch-motion-changes-direction' and
   "Whether motion commands during incremental search change search direction.
 If nil, the search direction (forward or backward) does not change when
 motion commands are used during incremental search, except when wrapping.
-If non-nil, the search direction is forward after \\[beginning-of-buffer] and \
-\\[scroll-up-command], and
+If non-nil, the search direction is forward after \
+\\<isearch-mode-map>\\[beginning-of-buffer] and \\[scroll-up-command], and
 backward after \\[end-of-buffer] and \\[scroll-down-command]."
   :type '(choice (const :tag "Off" nil)
                  (const :tag "On" t))
@@ -3557,7 +3556,8 @@ the word mode."
 (defun isearch-lazy-count-format (&optional suffix-p)
   "Format the current match number and the total number of matches.
 When SUFFIX-P is non-nil, the returned string is intended for
-isearch-message-suffix prompt.  Otherwise, for isearch-message-prefix."
+`isearch-message-suffix' prompt.  Otherwise, for
+`isearch-message-prefix'."
   (let ((format-string (if suffix-p
                            lazy-count-suffix-format
                          lazy-count-prefix-format)))

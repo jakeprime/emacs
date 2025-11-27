@@ -1,4 +1,4 @@
-/* Copyright (C) 1992-2024 Free Software Foundation, Inc.
+/* Copyright (C) 1992-2025 Free Software Foundation, Inc.
    Copyright The GNU Toolchain Authors.
    This file is part of the GNU C Library.
 
@@ -497,7 +497,7 @@
 # endif
 #endif
 
-/* ISO C99 also allows to declare arrays as non-overlapping.  The syntax is
+/* ISO C99 also allows declaring arrays as non-overlapping.  The syntax is
      array_name[restrict]
    GCC 3.1 and clang support this.
    This syntax is not usable in C++ mode.  */

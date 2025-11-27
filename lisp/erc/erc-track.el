@@ -1,6 +1,6 @@
 ;;; erc-track.el --- Track modified channel buffers  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2002-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2002-2025 Free Software Foundation, Inc.
 
 ;; Author: Mario Lang <mlang@delysid.org>
 ;; Maintainer: Amin Bandali <bandali@gnu.org>, F. Jason Park <jp@neverwas.me>
@@ -140,7 +140,7 @@ This setting is used by `erc-track-shorten-names'."
 		 (const :tag "Max" max)))
 
 (defcustom erc-track-shorten-function 'erc-track-shorten-names
-  "This function will be used to reduce the channel names before display.
+  "Function used to reduce the channel names before display.
 It takes one argument, CHANNEL-NAMES which is a list of strings.
 It should return a list of strings of the same number of elements.
 If nil instead of a function, shortening is disabled."
@@ -760,7 +760,7 @@ the number of unread messages, according to variables
 `erc-track-showcount' and `erc-track-showcount-string'.
 
 If `erc-track-use-faces' is true and FACES are provided, format
-STRING with them. When the mouse hovers above the button, STRING
+STRING with them.  When the mouse hovers above the button, STRING
 is displayed according to `erc-track-mouse-face'."
   ;; We define a new sparse keymap every time, because 1. this data
   ;; structure is very small, the alternative would require us to

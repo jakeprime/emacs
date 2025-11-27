@@ -1,6 +1,6 @@
 ;;; easy-mmode.el --- easy definition for major and minor modes  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1997, 2000-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1997, 2000-2025 Free Software Foundation, Inc.
 
 ;; Author: Georges Brun-Cottan <Georges.Brun-Cottan@inria.fr>
 ;; Maintainer: Stefan Monnier <monnier@gnu.org>
@@ -91,7 +91,7 @@ Enable the mode if ARG is nil, omitted, or is a positive number.
 Disable the mode if ARG is a negative number.
 
 To check whether the minor mode is enabled in the current buffer,
-evaluate `%s'.
+evaluate %s.
 
 The mode's hook is called both when the mode is enabled and when
 it is disabled.")
@@ -128,8 +128,11 @@ it is disabled.")
                         easy-mmode--arg-docstring
                         (if global "global " "")
                         mode-pretty-name
-                        ;; Avoid having quotes turn into pretty quotes.
-                        (string-replace "'" "\\='" (format "%S" getter)))))
+                        (concat
+                         (if (symbolp getter) "the variable ")
+                         (format "`%s'"
+                                 ;; Avoid having quotes turn into pretty quotes.
+                                 (string-replace "'" "\\='" (format "%S" getter)))))))
           (let ((start (point)))
             (insert argdoc)
             (when (fboundp 'fill-region) ;Don't break bootstrap!
@@ -455,8 +458,8 @@ switch on the minor mode in all major modes), nil (meaning don't
 switch on in any major mode), a list of modes (meaning switch on only
 in those modes and their descendants), or a list (not MODES...),
 meaning switch on in any major mode except MODES.  The value can also
-mix all of these forms, see the info node `Defining Minor Modes' for
-details.  The :predicate key causes the macro to create a user option
+mix all of these forms, see the Info node `(elisp)Defining Minor Modes'
+for details.  The :predicate key causes the macro to create a user option
 named the same as MODE, but ending with \"-modes\" instead of \"-mode\".
 That user option can then be used to customize in which modes this
 globalized minor mode will be switched on.
@@ -524,7 +527,8 @@ on if the hook has explicitly disabled it.
        (progn
          (put ',global-mode 'globalized-minor-mode t)
          :autoload-end
-         (defvar-local ,MODE-major-mode nil))
+         (defvar-local ,MODE-major-mode nil)
+         ,@(when predicate `((defvar ,MODE-predicate))))
        ;; The actual global minor-mode
        (define-minor-mode ,global-mode
          ,(concat (format "Toggle %s in all buffers.\n" pretty-name)

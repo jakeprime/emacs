@@ -1,6 +1,6 @@
 /* Random utility Lisp functions.
 
-Copyright (C) 1985-2024 Free Software Foundation, Inc.
+Copyright (C) 1985-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -719,7 +719,12 @@ The result is a list whose elements are the elements of all the arguments.
 Each argument may be a list, vector or string.
 
 All arguments except the last argument are copied.  The last argument
-is just used as the tail of the new list.
+is just used as the tail of the new list.  If the last argument is not
+a list, this results in a dotted list.
+
+As an exception, if all the arguments except the last are nil, and the
+last argument is not a list, the return value is that last argument
+unaltered, not a list.
 
 usage: (append &rest SEQUENCES)  */)
   (ptrdiff_t nargs, Lisp_Object *args)
@@ -3033,7 +3038,7 @@ value_cmp (Lisp_Object a, Lisp_Object b, int maxdepth)
       {
 	EMACS_INT ia = XFIXNUM (a);
 	if (FIXNUMP (b))
-	  return ia < XFIXNUM (b) ? -1 : 1;   /* we know that a≠b */
+	  return ia < XFIXNUM (b) ? -1 : 1;   /* we know that a != b */
 	if (FLOATP (b))
 	  return ia < XFLOAT_DATA (b) ? -1 : ia > XFLOAT_DATA (b);
 	if (BIGNUMP (b))
@@ -3058,7 +3063,7 @@ value_cmp (Lisp_Object a, Lisp_Object b, int maxdepth)
       goto type_mismatch;
 
     case Lisp_Cons:
-      /* FIXME: Optimise for difference in the first element? */
+      /* FIXME: Optimize for difference in the first element? */
       FOR_EACH_TAIL (b)
 	{
 	  int cmp = value_cmp (XCAR (a), XCAR (b), maxdepth - 1);
@@ -3397,7 +3402,8 @@ characters; nil stands for the empty string.
 
 FUNCTION must be a function of one argument, and must return a value
   that is a sequence of characters: either a string, or a vector or
-  list of numbers that are valid character codepoints.  */)
+  list of numbers that are valid character codepoints; nil is treated
+  as an empty string.  */)
   (Lisp_Object function, Lisp_Object sequence, Lisp_Object separator)
 {
   USE_SAFE_ALLOCA;
@@ -5359,7 +5365,7 @@ hash_string (char const *ptr, ptrdiff_t len)
 	  hash = sxhash_combine (hash, c);
 	}
       while (p + sizeof hash <= end);
-      /* Hash the last wordful of bytes in the string, because that is
+      /* Hash the last word's worth of bytes in the string, because that is
          is often the part where strings differ.  This may cause some
          bytes to be hashed twice but we assume that's not a big problem.  */
       EMACS_UINT c;
@@ -6336,7 +6342,7 @@ secure_hash (Lisp_Object algorithm, Lisp_Object object, Lisp_Object start,
   else
     error ("Invalid algorithm arg: %s", SDATA (Fsymbol_name (algorithm)));
 
-  /* allocate 2 x digest_size so that it can be re-used to hold the
+  /* allocate 2 x digest_size so that it can be reused to hold the
      hexified value */
   digest = make_uninit_string (digest_size * 2);
 
@@ -6379,6 +6385,11 @@ command `prefer-coding-system') is used.
 If NOERROR is non-nil, silently assume the `raw-text' coding if the
 guesswork fails.  Normally, an error is signaled in such case.
 
+This function is semi-obsolete, since for most purposes it is equivalent
+to calling `secure-hash` with the symbol `md5' as the ALGORITHM
+argument.  The OBJECT, START and END arguments have the same meanings as
+in `secure-hash'.
+
 Note that MD5 is not collision resistant and should not be used for
 anything security-related.  See `secure-hash' for alternatives.  */)
   (Lisp_Object object, Lisp_Object start, Lisp_Object end, Lisp_Object coding_system, Lisp_Object noerror)
@@ -6402,7 +6413,9 @@ whole OBJECT.
 
 The full list of algorithms can be obtained with `secure-hash-algorithms'.
 
-If BINARY is non-nil, returns a string in binary form.
+If BINARY is non-nil, returns a string in binary form.  In this case,
+the function returns a unibyte string whose length is half the number
+of characters it returns when BINARY is nil.
 
 Note that MD5 and SHA-1 are not collision resistant and should not be
 used for anything security-related.  For these applications, use one

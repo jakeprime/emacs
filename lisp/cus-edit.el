@@ -1,6 +1,6 @@
 ;;; cus-edit.el --- tools for customizing Emacs and Lisp packages -*- lexical-binding:t -*-
 
-;; Copyright (C) 1996-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2025 Free Software Foundation, Inc.
 
 ;; Author: Per Abrahamsen <abraham@dina.kvl.dk>
 ;; Maintainer: emacs-devel@gnu.org
@@ -1060,6 +1060,11 @@ This is like `setq', but is meant for user options instead of
 plain variables.  This means that `setopt' will execute any
 `custom-set' form associated with VARIABLE.
 
+Note that `setopt' will emit a warning if the type of a VALUE
+does not match the type of the corresponding VARIABLE as
+declared by `defcustom'.  (VARIABLE will be assigned the value
+even if it doesn't match the type.)
+
 \(fn [VARIABLE VALUE]...)"
   (declare (debug setq))
   (unless (zerop (mod (length pairs) 2))
@@ -1280,7 +1285,7 @@ Show the buffer in another window, but don't select it."
     (unless (eq symbol basevar)
       (message "`%s' is an alias for `%s'" symbol basevar))))
 
-(defvar customize-changed-options-previous-release "29.1"
+(defvar customize-changed-options-previous-release "29.4"
   "Version for `customize-changed' to refer back to by default.")
 
 ;; Packages will update this variable, so make it available.
@@ -5913,7 +5918,7 @@ The appropriate types are:
          (val (car value)))
     (cond
      ((eq val 'mode) (setf (nth 1 args)
-                           '(symbol :keymap custom-dirlocals-field-map
+                           `(symbol :keymap ,custom-dirlocals-field-map
                                     :tag "Minor mode")))
      ((eq val 'unibyte) (setf (nth 1 args) '(boolean)))
      ((eq val 'subdirs) (setf (nth 1 args) '(boolean)))
@@ -5922,7 +5927,7 @@ The appropriate types are:
         (when (custom--editable-field-p w)
           (widget-put w :keymap custom-dirlocals-field-map))
         (setf (nth 1 args) w)))
-     (t (setf (nth 1 args) '(sexp :keymap custom-dirlocals-field-map))))
+     (t (setf (nth 1 args) `(sexp :keymap ,custom-dirlocals-field-map))))
     (widget-put (nth 0 args) :keymap custom-dirlocals-field-map)
     (widget-group-value-create widget)))
 

@@ -1,6 +1,6 @@
 ;;; c-ts-mode.el --- tree-sitter support for C and C++  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2022-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2022-2025 Free Software Foundation, Inc.
 
 ;; Author     : Theodor Thornhill <theo@thornhill.no>
 ;; Maintainer : Theodor Thornhill <theo@thornhill.no>
@@ -35,13 +35,7 @@
 ;; To use these modes by default, assuming you have the respective
 ;; tree-sitter grammars available, do one of the following:
 ;;
-;; - If you have both C and C++ grammars installed, add
-;;
-;;    (require 'c-ts-mode)
-;;
-;;   to your init file.
-;;
-;; - Add one or mode of the following to your init file:
+;; - Add one or more of the following lines to your init file:
 ;;
 ;;    (add-to-list 'major-mode-remap-alist '(c-mode . c-ts-mode))
 ;;    (add-to-list 'major-mode-remap-alist '(c++-mode . c++-ts-mode))
@@ -58,6 +52,12 @@
 ;;                    . c++-ts-mode))
 ;;
 ;;   will turn on the c++-ts-mode for C++ source files.
+;;
+;; - If you have both C and C++ grammars installed, add
+;;
+;;     (load "c-ts-mode")
+;;
+;;   to your init file.
 ;;
 ;; You can also turn on these modes manually in a buffer.  Doing so
 ;; will set up Emacs to use the C/C++ modes defined here for other
@@ -82,6 +82,7 @@
 (declare-function treesit-node-prev-sibling "treesit.c")
 (declare-function treesit-node-first-child-for-pos "treesit.c")
 (declare-function treesit-node-next-sibling "treesit.c")
+(declare-function treesit-node-eq "treesit.c")
 (declare-function treesit-query-compile "treesit.c")
 
 ;;; Custom variables
@@ -146,10 +147,11 @@ symbol."
 (defcustom c-ts-mode-indent-style 'gnu
   "Style used for indentation.
 
-The selected style could be one of GNU, K&R, LINUX or BSD.  If
-one of the supplied styles doesn't suffice, the value could be
-a function instead.  This function is expected to return a list
-that follows the form of `treesit-simple-indent-rules'."
+The selected style could be one of GNU, K&R, LINUX or BSD.  If the
+supplied styles don't suffice, the value could be a function instead.
+This function takes no arguments and is expected to return a list of
+indent RULEs as described in `treesit-simple-indent-rules'.  Note that
+the list of RULEs doesn't need to contain the language symbol."
   :version "29.1"
   :type '(choice (symbol :tag "Gnu" gnu)
                  (symbol :tag "K&R" k&r)
@@ -321,13 +323,17 @@ characters of the current line."
           ((or "#elif" "#else")
            (setq prev-sibling (treesit-node-prev-sibling
                                (treesit-node-parent prev-sibling) t)))
-          ;; If the start of the previous sibling isn't at the
-          ;; beginning of a line, something's probably not quite
-          ;; right, go a step further. (E.g., comment after a
-          ;; statement.)
+          ;; If the start of the previous sibling isn't at the beginning
+          ;; of a line, something's probably not quite right, go a step
+          ;; further. (E.g., comment after a statement.)  If the
+          ;; previous sibling is the first named node, then anchor to
+          ;; that, e.g. when returning an aggregate and starting the
+          ;; items on the same line as {.
           (_ (goto-char (treesit-node-start prev-sibling))
-             (if (looking-back (rx bol (* whitespace))
-                               (line-beginning-position))
+             (if (or (looking-back (rx bol (* whitespace))
+                                   (line-beginning-position))
+                     (treesit-node-eq (treesit-node-child parent 0 t)
+                                      prev-sibling))
                  (setq continue nil)
                (setq prev-sibling
                      (treesit-node-prev-sibling prev-sibling)))))))
@@ -463,7 +469,8 @@ MODE is either `c' or `cpp'."
            ,@(when (eq mode 'cpp)
                '(((node-is "access_specifier") parent-bol 0)
                  ;; Indent the body of namespace definitions.
-                 ((parent-is "declaration_list") parent-bol c-ts-mode-indent-offset)))
+                 ((parent-is "declaration_list") parent-bol c-ts-mode-indent-offset)
+                 ((parent-is "template_declaration") parent-bol 0)))
 
 
            ;; int[5] a = { 0, 0, 0, 0 };
@@ -572,8 +579,8 @@ MODE is either `c' or `cpp'."
                   "not" "not_eq" "operator" "or"
                   "or_eq" "override" "private" "protected"
                   "public" "requires" "template" "throw"
-                  "try" "typename" "using" "virtual"
-                  "xor" "xor_eq"))
+                  "try" "typename" "using"
+                  "xor" "xor_eq" "thread_local"))
       (append '("auto") c-keywords))))
 
 (defvar c-ts-mode--type-keywords
@@ -590,6 +597,11 @@ MODE is either `c' or `cpp'."
   (rx "FOR_EACH_" (or "TAIL" "TAIL_SAFE" "ALIST_VALUE"
                       "LIVE_BUFFER" "FRAME"))
   "A regexp matching all the variants of the FOR_EACH_* macro.")
+
+(defun c-ts-mode--test-virtual-named-p ()
+  "Return t if the virtual keyword is a namded node, nil otherwise."
+  (ignore-errors
+    (progn (treesit-query-compile 'cpp "(virtual)" t) t)))
 
 (defun c-ts-mode--font-lock-settings (mode)
   "Tree-sitter font-lock settings.
@@ -635,7 +647,13 @@ MODE is either `c' or `cpp'."
    `([,@(c-ts-mode--keywords mode)] @font-lock-keyword-face
      ,@(when (eq mode 'cpp)
          '((auto) @font-lock-keyword-face
-           (this) @font-lock-keyword-face)))
+           (this) @font-lock-keyword-face))
+     ,@(when (and (eq mode 'cpp)
+                  (c-ts-mode--test-virtual-named-p))
+         '((virtual) @font-lock-keyword-face))
+     ,@(when (and (eq mode 'cpp)
+                  (not (c-ts-mode--test-virtual-named-p)))
+         '("virtual" @font-lock-keyword-face)))
 
    :language mode
    :feature 'operator
@@ -673,7 +691,9 @@ MODE is either `c' or `cpp'."
    :language mode
    :feature 'definition
    ;; Highlights identifiers in declarations.
-   `((declaration
+   `(,@(when (eq mode 'cpp)
+         '((destructor_name (identifier) @font-lock-function-name-face)))
+     (declaration
       declarator: (_) @c-ts-mode--fontify-declarator)
 
      (field_declaration
@@ -1235,9 +1255,6 @@ BEG and END are described in `treesit-range-rules'."
               `((c ,@c-ts-mode--thing-settings)
                 (cpp ,@c-ts-mode--thing-settings)))
 
-  ;; Nodes like struct/enum/union_specifier can appear in
-  ;; function_definitions, so we need to find the top-level node.
-  (setq-local treesit-defun-prefer-top-level t)
 
   ;; When the code is in incomplete state, try to make a better guess
   ;; about which node to indent against.
@@ -1314,7 +1331,8 @@ in your init files."
     ;; Create an "for-each" parser, see `c-ts-mode--emacs-set-ranges'
     ;; for more.
     (when c-ts-mode-emacs-sources-support
-      (treesit-parser-create 'c nil nil 'for-each))
+      (setq-local treesit-primary-parser
+                  (treesit-parser-create 'c nil nil 'for-each)))
 
     (treesit-parser-create 'c)
     ;; Comments.
@@ -1326,6 +1344,9 @@ in your init files."
     ;; Font-lock.
     (setq-local treesit-font-lock-settings (c-ts-mode--font-lock-settings 'c))
     ;; Navigation.
+    ;;
+    ;; Nodes like struct/enum/union_specifier can appear in
+    ;; function_definitions, so we need to find the top-level node.
     (setq-local treesit-defun-tactic 'top-level)
     (treesit-major-mode-setup)
 
@@ -1417,9 +1438,9 @@ recommended to enable `electric-pair-mode' with this mode."
       :help "Toggle C/C++ comment style between block and line comments"])
     "--"
     ("Toggle..."
-     ["SubWord Mode" subword-mode
+     ["Subword Mode" subword-mode
       :style toggle :selected subword-mode
-      :help "Toggle sub-word movement and editing mode"])))
+      :help "Toggle subword movement and editing mode"])))
 
 ;; We could alternatively use parsers, but if this works well, I don't
 ;; see the need to change.  This is copied verbatim from cc-guess.el.
@@ -1468,19 +1489,20 @@ the code is C or C++, and based on that chooses whether to enable
            'c-ts-mode)))
     (funcall (major-mode-remap mode))))
 
-;; The entries for C++ must come first to prevent *.c files be taken
-;; as C++ on case-insensitive filesystems, since *.C files are C++,
-;; not C.
-(if (treesit-ready-p 'cpp)
-    (add-to-list 'major-mode-remap-defaults
-                 '(c++-mode . c++-ts-mode)))
+(when (treesit-ready-p 'cpp)
+  (setq major-mode-remap-defaults
+        (assq-delete-all 'c++-mode major-mode-remap-defaults))
+  (add-to-list 'major-mode-remap-defaults '(c++-mode . c++-ts-mode)))
 
 (when (treesit-ready-p 'c)
-  (add-to-list 'major-mode-remap-defaults '(c++-mode . c++-ts-mode))
+  (setq major-mode-remap-defaults
+        (assq-delete-all 'c-mode major-mode-remap-defaults))
   (add-to-list 'major-mode-remap-defaults '(c-mode . c-ts-mode)))
 
 (when (and (treesit-ready-p 'cpp)
            (treesit-ready-p 'c))
+  (setq major-mode-remap-defaults
+        (assq-delete-all 'c-or-c++-mode major-mode-remap-defaults))
   (add-to-list 'major-mode-remap-defaults '(c-or-c++-mode . c-or-c++-ts-mode)))
 
 (provide 'c-ts-mode)

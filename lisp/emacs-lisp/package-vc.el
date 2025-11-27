@@ -1,8 +1,9 @@
 ;;; package-vc.el --- Manage packages from VC checkouts     -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2022-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2022-2025 Free Software Foundation, Inc.
 
 ;; Author: Philip Kaludercic <philipk@posteo.net>
+;; Maintainer: Philip Kaludercic <philipk@posteo.net>
 ;; Keywords: tools
 
 ;; This file is part of GNU Emacs.
@@ -264,13 +265,13 @@ asynchronously."
 
 (add-hook 'package-read-archive-hook     #'package-vc--read-archive-data 20)
 
-(defun package-vc-commit (pkg)
-  "Return the last commit of a development package PKG."
-  (cl-assert (package-vc-p pkg))
+(defun package-vc-commit (pkg-desc)
+  "Return the last commit of a development package PKG-DESC."
+  (cl-assert (package-vc-p pkg-desc))
   ;; FIXME: vc should be extended to allow querying the commit of a
   ;; directory (as is possible when dealing with git repositories).
   ;; This should be a fallback option.
-  (cl-loop with dir = (package-desc-dir pkg)
+  (cl-loop with dir = (package-desc-dir pkg-desc)
            for file in (directory-files dir t "\\.el\\'" t)
            when (vc-working-revision file) return it
            finally return "unknown"))
@@ -358,7 +359,11 @@ asynchronously."
                          requires))))
           (list :kind 'vc)
           (package--alist-to-plist-args
-           (package-desc-extras pkg-desc))))
+           (let ((extras (copy-alist (package-desc-extras pkg-desc))))
+             (setf (alist-get :commit extras)
+                   (package-vc-commit pkg-desc))
+             extras)
+           )))
         "\n")
        nil pkg-file nil 'silent))))
 
@@ -460,7 +465,7 @@ this function successfully installs all given dependencies)."
                   "Attempt to find all dependencies for PKG."
                   (cond
                    ((assq (car pkg) to-install)) ;inhibit cycles
-                   ((package-installed-p (car pkg)))
+                   ((package-installed-p (car pkg) (cadr pkg)))
                    ((let* ((pac package-archive-contents)
                            (desc (cadr (assoc (car pkg) pac))))
                       (if desc
@@ -1024,6 +1029,13 @@ See also `vc-prepare-patch'."
   (let ((default-directory (package-desc-dir pkg-desc)))
     (vc-prepare-patch (package-maintainers pkg-desc t)
                       subject revisions)))
+
+(defun package-vc-log-incoming (pkg-desc)
+  "Call `vc-log-incoming' for the package PKG-DESC."
+  (interactive
+   (list (package-vc--read-package-desc "Incoming log for package: " t)))
+  (let ((default-directory (package-desc-dir pkg-desc)))
+    (call-interactively #'vc-log-incoming)))
 
 (provide 'package-vc)
 ;;; package-vc.el ends here

@@ -1,6 +1,6 @@
 /* Minibuffer input and completion.
 
-Copyright (C) 1985-1986, 1993-2024 Free Software Foundation, Inc.
+Copyright (C) 1985-1986, 1993-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -63,7 +63,7 @@ Lisp_Object last_minibuf_string;
 
 static Lisp_Object minibuf_prompt;
 
-/* The frame containinug the most recently opened Minibuffer.  This is
+/* The frame containing the most recently opened minibuffer.  This is
    used only when `minibuffer-follows-selected-frame' is neither nil
    nor t.  */
 
@@ -1248,27 +1248,36 @@ static void
 minibuffer_unwind (void)
 {
   struct frame *f;
-  struct window *w;
-  Lisp_Object window;
-  Lisp_Object entry;
 
   if (NILP (exp_MB_frame)) return; /* "Can't happen." */
   f = XFRAME (exp_MB_frame);
-  window = f->minibuffer_window;
-  w = XWINDOW (window);
   if (FRAME_LIVE_P (f))
     {
-      /* minibuf_window = sf->minibuffer_window; */
-      if (!NILP (w->prev_buffers))
+      Lisp_Object window = f->minibuffer_window;
+
+      if (WINDOW_LIVE_P (window))
 	{
-	  entry = Fcar (w->prev_buffers);
-	  w->prev_buffers = Fcdr (w->prev_buffers);
-	  set_window_buffer (window, Fcar (entry), 0, 0);
-	  Fset_window_start (window, Fcar (Fcdr (entry)), Qnil);
-	  Fset_window_point (window, Fcar (Fcdr (Fcdr (entry))));
+	  struct window *w = XWINDOW (window);
+
+	  /* minibuf_window = sf->minibuffer_window; */
+	  if (!NILP (w->prev_buffers))
+	    {
+	      Lisp_Object entry = Fcar (w->prev_buffers);
+
+	      if (BUFFERP (Fcar (entry))
+		  && BUFFER_LIVE_P (XBUFFER (Fcar (entry))))
+		{
+		  wset_prev_buffers (w, Fcdr (w->prev_buffers));
+		  set_window_buffer (window, Fcar (entry), 0, 0);
+		  Fset_window_start (window, Fcar (Fcdr (entry)), Qnil);
+		  Fset_window_point (window, Fcar (Fcdr (Fcdr (entry))));
+		}
+	      else
+		set_window_buffer (window, nth_minibuffer (0), 0, 0);
+	    }
+	  else
+	    set_window_buffer (window, nth_minibuffer (0), 0, 0);
 	}
-      else
-	set_window_buffer (window, nth_minibuffer (0), 0, 0);
     }
 }
 
@@ -1283,7 +1292,7 @@ barf_if_interaction_inhibited (void)
 
 DEFUN ("read-from-minibuffer", Fread_from_minibuffer,
        Sread_from_minibuffer, 1, 7, 0,
-       doc: /* Read a string from the minibuffer, prompting with string PROMPT.
+       doc: /* Read and return a string from the minibuffer, prompting with string PROMPT.
 The optional second arg INITIAL-CONTENTS is an obsolete alternative to
   DEFAULT-VALUE.  It normally should be nil in new code, except when
   HIST is a cons.  It is discussed in more detail below.
@@ -1393,20 +1402,28 @@ and some related functions, which use zero-indexing for POSITION.  */)
 /* Functions that use the minibuffer to read various things.  */
 
 DEFUN ("read-string", Fread_string, Sread_string, 1, 5, 0,
-       doc: /* Read a string from the minibuffer, prompting with string PROMPT.
-If non-nil, second arg INITIAL-INPUT is a string to insert before reading.
-  This argument has been superseded by DEFAULT-VALUE and should normally be nil
-  in new code.  It behaves as INITIAL-CONTENTS in `read-from-minibuffer' (which
-  see).
-The third arg HISTORY, if non-nil, specifies a history list
-  and optionally the initial position in the list.
+       doc: /* Read and return a string from the minibuffer, prompting with PROMPT.
+
+PROMPT is a string, which should normally end with the string ": ".
+
+If non-nil, second arg INITIAL-INPUT is a string to insert before
+reading.  This argument has been superseded by DEFAULT-VALUE and should
+normally be nil in new code.  It behaves as INITIAL-CONTENTS in
+`read-from-minibuffer' (which see).
+
+The third arg HISTORY, if non-nil, specifies a history list and
+optionally the initial position in the list.
+
 See `read-from-minibuffer' for details of HISTORY argument.
-Fourth arg DEFAULT-VALUE is the default value or the list of default values.
- If non-nil, it is used for history commands, and as the value (or the first
- element of the list of default values) to return if the user enters the
- empty string.
-Fifth arg INHERIT-INPUT-METHOD, if non-nil, means the minibuffer inherits
- the current input method and the setting of `enable-multibyte-characters'.  */)
+
+Fourth arg DEFAULT-VALUE is the default value or the list of default
+values.  If non-nil, it is used for history commands, and as the value
+(or the first element of the list of default values) to return if the
+user enters the empty string.
+
+Fifth arg INHERIT-INPUT-METHOD, if non-nil, means the minibuffer
+inherits the current input method and the setting of
+`enable-multibyte-characters'.  */)
   (Lisp_Object prompt, Lisp_Object initial_input, Lisp_Object history, Lisp_Object default_value, Lisp_Object inherit_input_method)
 {
   Lisp_Object val;
@@ -1427,7 +1444,7 @@ Fifth arg INHERIT-INPUT-METHOD, if non-nil, means the minibuffer inherits
 }
 
 DEFUN ("read-command", Fread_command, Sread_command, 1, 2, 0,
-       doc: /* Read the name of a command and return as a symbol.
+       doc: /* Read the name of a command and return it as a symbol.
 Prompt with PROMPT.  By default, return DEFAULT-VALUE or its first element
 if it is a list.  If DEFAULT-VALUE is omitted or nil, and the user enters
 null input, return a symbol whose name is an empty string.  */)
@@ -1969,6 +1986,11 @@ with a space are ignored unless STRING itself starts with a space.  */)
 
 DEFUN ("completing-read", Fcompleting_read, Scompleting_read, 2, 8, 0,
        doc: /* Read a string in the minibuffer, with completion.
+While in the minibuffer, you can use \\<minibuffer-local-completion-map>\\[minibuffer-complete] and \\[minibuffer-complete-word] to complete your input.
+You can also use \\<minibuffer-local-map>\\[minibuffer-complete-history] to complete using history items in the
+input history HIST, and you can use \\[minibuffer-complete-defaults] to complete using
+the default items in DEFAULT-VALUE.
+
 PROMPT is a string to prompt with; normally it ends in a colon and a space.
 COLLECTION can be a list of strings, an alist, an obarray or a hash table.
 COLLECTION can also be a function to do the completion itself.

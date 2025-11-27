@@ -1,6 +1,6 @@
 ;;; rcirc.el --- default, simple IRC client          -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2005-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2005-2025 Free Software Foundation, Inc.
 
 ;; Author: Ryan Yeske <rcyeske@gmail.com>
 ;; Maintainers: Ryan Yeske <rcyeske@gmail.com>,
@@ -1197,7 +1197,7 @@ With no argument or nil as argument, use the current buffer."
   "Return PROCESS server name, given by the 001 response."
   (with-rcirc-process-buffer process
     (or rcirc-server-name
-        (warn "server name for process %S unknown" process))))
+        (warn "Server name for process %S unknown" process))))
 
 (defun rcirc-nick (process)
   "Return PROCESS nick."
@@ -2448,7 +2448,8 @@ This function does not alter the INPUT string."
 
 (defun rcirc-next-active-buffer (arg)
   "Switch to the next rcirc buffer with activity.
-With prefix ARG, go to the next low priority buffer with activity."
+With prefix ARG, go to the next low priority buffer with activity.
+When there are no buffers with activity, bury all rcirc buffers."
   (interactive "P")
   (let* ((pair (rcirc-split-activity rcirc-activity))
          (lopri (car pair))
@@ -2537,9 +2538,25 @@ activity.  Only run if the buffer is not visible and
                                       (rcirc-activity-string lopri)
                                       ")"))
                          (and hipri "]")))
+                ;; Consistently don't display anything if there aren't
+                ;; any IRC connections.  Otherwise, whether we display
+                ;; "[]" or not depends on whether or not this function
+                ;; happens to have been called in this session yet.
+                ;;
+                ;; Consistently display nothing, rather than
+                ;; consistently displaying "[]", for the sake of the
+                ;; following sort of case: the user has enabled
+                ;; `rcirc-track-minor-mode' using the customization
+                ;; system, but also starts up Emacs instances that
+                ;; aren't used for IRC.  Due to the use of easy
+                ;; customization, `rcirc-track-minor-mode' will be
+                ;; turned on for every instance of Emacs.  But we don't
+                ;; want to take up valuable mode line space when, say,
+                ;; Emacs is started up as the value of EDITOR/VISUAL.
                 ((not (null (rcirc-process-list)))
                  "[]")
-                (t "[]")))
+                (t
+                 "")))
     (run-hooks 'rcirc-update-activity-string-hook)
     (force-mode-line-update t)))
 

@@ -15,7 +15,7 @@
 @end direntry
 
 @copying
-Copyright @copyright{} 2008, 2010--2024 Free Software Foundation, Inc.
+Copyright @copyright{} 2008, 2010--2025 Free Software Foundation, Inc.
 
 @quotation
 Permission is granted to copy, distribute and/or modify this document
@@ -46,15 +46,17 @@ modify this GNU manual.''
 @insertcopying
 
 ERT is a tool for automated testing in Emacs Lisp.  Its main features
-are facilities for defining tests, running them and reporting the
-results, and for debugging test failures interactively.
+are facilities for defining and running tests, reporting results, and
+debugging test failures interactively.  Tests are written in Emacs Lisp,
+just like the code under test, making it easy to write expressive and
+concise test cases.
 
-ERT is similar to tools for other environments such as JUnit, but has
-unique features that take advantage of the dynamic and interactive
-nature of Emacs.  Despite its name, it works well both for test-driven
-development (see
-@url{https://en.wikipedia.org/wiki/Test-driven_development}) and for
-traditional software development methods.
+ERT has unique features that take advantage of the dynamic and
+interactive nature of Emacs.  It is unopinionated about when or how
+tests are written: you can use it to verify newly written code,
+reproduce known bugs, prevent regressions, or explore the behavior of
+complex systems.  It can be used for both unit tests and larger
+integration tests.
 
 @menu
 * Introduction::                A simple example of an ERT test.
@@ -132,11 +134,11 @@ package @file{pp.el}):
 ;; (pp-to-string '('a 'b))                ; same as above
 @end lisp
 
-The code contained in these comments can be evaluated from time to
-time to compare the output with the expected output.  ERT formalizes
-this and introduces a common convention, which simplifies Emacs
-development, since programmers no longer have to manually find and
-evaluate such comments.
+The Lisp forms contained in these comments can be evaluated from time to
+time, e.g. with @kbd{C-x C-e}, to compare the output with the expected
+output.  ERT formalizes this and introduces a common convention, which
+simplifies Emacs development, since programmers no longer have to
+manually find and evaluate such comments.
 
 An ERT test definition equivalent to the above comments is this:
 
@@ -203,11 +205,14 @@ different Emacs versions.
 @cindex interactive testing
 
 @findex ert
-You can run the tests that are currently defined in your Emacs with
-the command @kbd{M-x ert @key{RET} t @key{RET}}.  (For an
-explanation of the @code{t} argument, @pxref{Test Selectors}.) ERT will pop
-up a new buffer, the ERT results buffer, showing the results of the
-tests run.  It looks like this:
+@findex ert-run-tests-interactively
+You can run the tests that are currently defined in your Emacs with the
+command @kbd{M-x ert @key{RET} t @key{RET}} (which is an alias of
+@code{ert-run-tests-interactively}).  The @code{t} argument means to run
+all the defined tests, see @ref{Test Selectors}, which also explains how
+to run only some specific part of the tests.  ERT will pop up a new
+buffer, the ERT results buffer, showing the results of the tests run.
+It looks like this:
 
 @example
 Selector: t
@@ -474,7 +479,7 @@ to Common Lisp's type specifier syntax:
 @item @code{:failed} and @code{:passed} select tests according to their most recent result.
 @item @code{:expected}, @code{:unexpected} select tests according to their most recent result.
 @item A string is a regular expression that selects all tests with matching names.
-@item A test (i.e., an object of @code{ert-test} data type) selects that test.
+@item A test (i.e., an object of @code{ert-test} data type, see its doc string for details) selects that test.
 @item A symbol selects the test that the symbol names.
 @item @code{(member @var{tests}...)} selects the elements of
 @var{tests}, a list of tests or symbols naming tests.
@@ -934,6 +939,7 @@ where the @samp{|} character is in the ``after'' form (and issue a
 test failure if that isn't the case).  (This is used in all subsequent
 tests, unless overridden by a new @samp{Point-Char} spec.)
 
+@cindex skipping tests, in erts file
 @item Skip
 If this is present and value is a form that evaluates to a
 non-@code{nil} value, the test will be skipped.
@@ -952,7 +958,7 @@ checking face assignment.  Test assertions are included in code-level
 comments directly and can be read either from inline strings or files.
 The parser expects the input string to contain at least one assertion.
 
-Test assertion parser extracts tests from comment-only lines.  Every
+The test assertion parser extracts tests from comment-only lines.  Every
 comment assertion line starts either with a caret (@samp{^}) or an arrow
 (@samp{<-}).  A single caret/arrow or carets should be followed
 immediately by the name of a face or a list of faces to be checked
@@ -974,7 +980,7 @@ var variable = 11;
 @end example
 
 Both symbol-only @code{:face} property values and assertion face values
-are normalized to single element lists so assertions below are
+are normalized to single element lists so the assertions below are
 equivalent:
 
 @example
@@ -1051,7 +1057,7 @@ definition:
 
 @lisp
 (ert-font-lock-deftest test-macro-test--inline
-    emacs-lisp-mode
+  emacs-lisp-mode
   "
 (defun fun ())
 ;; ^ font-lock-keyword-face
@@ -1065,13 +1071,13 @@ file:
 
 @lisp
 (ert-font-lock-deftest-file test-macro-test--file
-    "Test reading correct assertions from a file"
+  "Test reading correct assertions from a file."
   javascript-mode
   "correct.js")
 @end lisp
 
 The @code{ert-font-lock-deftest} and @code{ert-font-lock-deftest-file}
-macros accept the same keyword parameters as @code{ert-deftest} i.e.,
+macros accept the same keyword arguments as @code{ert-deftest}, i.e.,
 @code{:tag} and @code{:expected-result}.
 
 @node How to Debug Tests

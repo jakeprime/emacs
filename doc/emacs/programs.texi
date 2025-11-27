@@ -1,6 +1,6 @@
 @c -*- coding: utf-8 -*-
 @c This is part of the Emacs manual.
-@c Copyright (C) 1985--1987, 1993--1995, 1997, 1999--2024 Free Software
+@c Copyright (C) 1985--1987, 1993--1995, 1997, 1999--2025 Free Software
 @c Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @node Programs
@@ -94,14 +94,15 @@ mode for the C programming language is @code{c-mode}.
 @cindex TOML mode
   Emacs has programming language modes for Lisp, Scheme, the
 Scheme-based DSSSL expression language, Ada, ASM, AWK, C, C++, C#,
-Fortran, Icon, IDL (CORBA), IDLWAVE, Java, Javascript, M4, Makefiles,
-Metafont (@TeX{}'s companion for font creation), Modula2, Object
-Pascal, Objective-C, Octave, Pascal, Perl, Pike, PostScript, Prolog,
-Python, Ruby, Simula, SQL, Tcl, TypeScript, Verilog, and VHDL@.  An
-alternative mode for Perl is called CPerl mode.  Modes are also
-available for the scripting languages of the common GNU and Unix
-shells, and MS-DOS/MS-Windows @samp{BAT} files, JSON, DNS master
-files, CSS (Cascading Style Sheets), Dockerfiles, CMake files, and various sorts of configuration files.
+Elixir, Fortran, Icon, IDL (CORBA), HEEx, IDLWAVE, Java, Javascript,
+Lua, M4, Makefiles, Metafont (@TeX{}'s companion for font creation),
+Modula2, Object Pascal, Objective-C, Octave, Pascal, Perl, PHP, Pike,
+PostScript, Prolog, Python, Ruby, Simula, SQL, Tcl, TypeScript, Verilog,
+and VHDL@.  The recommended mode for Perl is called CPerl mode.  Modes
+are also available for the scripting languages of the common GNU and
+Unix shells, and MS-DOS/MS-Windows @samp{BAT} files, JSON, DNS master
+files, CSS (Cascading Style Sheets), Dockerfiles, CMake files, and
+various sorts of configuration files.
 
   Ideally, Emacs should have a major mode for each programming
 language that you might want to edit.  If it doesn't have a mode for
@@ -114,6 +115,16 @@ offers several optional editing modes based on that library, which
 utilize the incremental parsing capabilities provided by
 @samp{tree-sitter}.  These modes have @samp{-ts-} in their names; for
 example @code{c-ts-mode}, @code{python-ts-mode}, etc.
+
+@cindex LSP
+@cindex language server
+@cindex Eglot
+  Major modes for programming languages can use services of
+@dfn{language servers} via the facilities provided by the Eglot package.
+Eglot implements LSP, the @dfn{language server protocol}, which allows
+Emacs to receive language-specific information and services that enrich
+and extend source code editing capabilities.  @xref{Eglot Features,,,
+eglot, Eglot: The Emacs LSP Client}.
 
 @kindex DEL @r{(programming modes)}
 @findex backward-delete-char-untabify
@@ -331,20 +342,43 @@ a negative argument moves back to the start of a sentence.
 @cindex index of buffer definitions
 @cindex buffer definitions index
 
-  The Imenu facility offers a way to find the major definitions in
-a file by name.  It is also useful in text formatter major modes,
-where it treats each chapter, section, etc., as a definition.
-(@xref{Xref}, for a more powerful feature that handles multiple files
-together.)
+  The Imenu facility offers a way to find the major definitions in a
+file by name.  It is useful both in programming-language major modes,
+where the definitions are variables, functions, etc., and in text
+formatter major modes, where it treats each chapter, section, etc., as a
+definition.  (@xref{Xref}, for a more powerful feature that handles
+multiple files together.)
 
 @findex imenu
 @vindex imenu-flatten
   If you type @kbd{M-g i} (@code{imenu}), it reads the name of a
 definition using the minibuffer, then moves point to that definition.
-You can use completion to specify the name; the command always
-displays the whole list of valid names.  If you set @code{imenu-flatten}
-to a non-@code{nil} value, then instead of the nested menu
-you can select a completion candidate from the flat list.
+You can use completion to specify the name; the command displays the
+list of matching valid names in the completions buffer.  If the index is
+hierarchical, then by default the completion candidates are also shown
+hierarchically, as a nested list: first you need to choose a section,
+then a subsection, etc., and finally the name of the definition.
+However, if you set @code{imenu-flatten} to a non-@code{nil} value, then
+instead of the nested menu you can select a completion candidate from a
+flattened list of definitions.  How the sections and subsections are
+shown in the flattened list of completion candidates depends on the
+value of @code{imenu-flatten}, which can be one of the following:
+
+@table @code
+@vindex imenu-level-separator
+@item prefix
+This shows each candidate prefixed by names of its section, subsection,
+subsubsection, etc., with each level separated from the next by the
+string that is the value of @code{imenu-level-separator}, by default
+@samp{:}.
+
+@item annotation
+This shows the section names as annotations, following each definition
+name.
+
+@item group
+This shows the completion candidates grouped by their sections.
+@end table
 
 @findex imenu-add-menubar-index
   Alternatively, you can bind the command @code{imenu} to a mouse
@@ -382,6 +416,7 @@ define your own comparison function by writing Lisp code.
 the variable @code{completion-category-overrides} and setting its
 @code{display-sort-function} for the category @code{imenu}.
 
+@cindex eglot, for producing Imenu index
   If Eglot is activated for the current buffer's project
 (@pxref{Projects}) and the current buffer's major mode, Eglot provides
 its own facility for producing the buffer's index based on the
@@ -925,11 +960,11 @@ argument specifies the number of levels to go down.
 
 @node Matching
 @subsection Matching Parentheses
-@cindex matching parentheses
+@cindex matching, parentheses and other paired delimiters
 @cindex parentheses, displaying matches
 
-  Emacs has a number of @dfn{parenthesis matching} features, which
-make it easy to see how and whether parentheses (or other delimiters)
+  Emacs has a number of @dfn{parenthesis matching} features, which make
+it easy to see how and whether parentheses (or other paired delimiters)
 match up.
 
   Whenever you type a self-inserting character that is a closing
@@ -1028,48 +1063,94 @@ nonblank line.
 @cindex Electric Pair mode
 @cindex inserting matching parentheses
 @findex electric-pair-mode
-  Electric Pair mode, a global minor mode, provides a way to easily
-insert matching delimiters: parentheses, braces, brackets, etc.
-Whenever you insert an opening delimiter, the matching closing
-delimiter is automatically inserted as well, leaving point between the
-two.  Conversely, when you insert a closing delimiter over an existing
-one, no insertion takes places, and that position is simply skipped
-over.  If the region is active (@pxref{Mark}), insertion of a
-delimiter operates on the region: the characters in the region are
-enclosed in a pair of matching delimiters, leaving point after the
-delimiter you typed.
+  Electric Pair mode is a minor mode that provides a way to easily
+insert pairs of matching delimiters: parentheses, braces, brackets,
+quotes, etc.@: (what counts as matching delimiters depends on the major
+mode).  To toggle Electric Pair mode globally, type @w{@kbd{M-x
+electric-pair-mode}}.  To toggle it only in the current buffer, type
+@w{@kbd{M-x electric-pair-local-mode}}.
 
-These variables control additional features of Electric Pair mode:
+  When this mode is enabled, typing an opening delimiter inserts both
+that character and, immediately following it, the matching closing
+delimiter, leaving point between the two.  This makes it unnecessary to
+type a matching closing delimiter in most cases.  If you type one
+nonetheless, Emacs simply inserts that character, unless point is
+immediately before a closing delimiter of the same type; in that case,
+point moves to immediately after the closing delimiter and no additional
+closing delimiter is inserted.  Thus, typing the sequence <opening
+delimiter>, <matching closing delimiter> is a perhaps more convenient
+alternative to the sequence <opening delimiter>, @kbd{C-f}.
+
+  With an active region (@pxref{Mark}), Electric Pair mode operates
+differently: inserting either an opening or a closing delimiter encloses
+the characters in the region within the resulting pair of matching
+delimiters, leaving point after the delimiter you typed (this
+facilitates continuing to type either before the text following the
+opening delimiter or after the closing delimiter).
+
+  There are several user options for modifying the behavior of Electric
+Pair mode:
 
 @itemize @bullet
 @item
 @vindex electric-pair-preserve-balance
-@code{electric-pair-preserve-balance}, when non-@code{nil}, makes the
-default pairing logic balance out the number of opening and closing
-delimiters.
+@code{electric-pair-preserve-balance}, when non-@code{nil} (the
+default), makes typing a delimiter preserve the balance between opening
+and closing delimiters.  Thus, if you type an opening delimiter and
+there is an unpaired matching closing delimiter later in the buffer,
+then only the opening delimiter gets inserted (and not a matching
+closing delimiter immediately following it); likewise, if there is an
+unpaired opening delimiter, then typing a matching closing delimiter
+later in the buffer inserts this character even when the following
+character is another matching closing delimiter.
+
+  When set to @code{nil}, typing an opening delimiter inserts only this
+character, but only when point is either immediately before or
+immediately after a matching opening delimiter, or immediately before a
+letter or digit; in all other positions inserting an opening delimiter
+automatically inserts a matching closing delimiter immediately following
+it, even if there is an unpaired matching closing delimiter later in the
+buffer.  And typing a closing delimiter immediately before another
+closing delimiter of the same type does not insert that character but
+moves point as described above, even when there is an unpaired matching
+opening delimiter earlier in the buffer.
+
+  If there is an active region, this variable has no effect.
 
 @item
 @vindex electric-pair-delete-adjacent-pairs
-@code{electric-pair-delete-adjacent-pairs}, when non-@code{nil}, makes
-backspacing between two adjacent delimiters also automatically delete
-the closing delimiter.
+@code{electric-pair-delete-adjacent-pairs}, when non-@code{nil} (the
+default), makes deleting an opening delimiter by typing the @key{DEL}
+key (which is normally the @key{BACKSPACE} key; @pxref{DEL Does Not
+Delete}) automatically also delete an immediately following matching
+closing delimiter (but not if there are any characters---including just
+whitespace---between the paired delimiters).  When set to @code{nil},
+typing @key{BACKSPACE} deletes only the opening delimiter.  (Typing
+@key{BACKSPACE} to delete a closing delimiter always deletes only this
+character.)
 
 @item
 @vindex electric-pair-open-newline-between-pairs
-@code{electric-pair-open-newline-between-pairs}, when non-@code{nil},
-makes inserting a newline between two adjacent pairs also
-automatically open an extra newline after point.
+When @code{electric-pair-open-newline-between-pairs} is non-@code{nil}
+(the default) and point is between an opening delimiter and an
+immediately following matching closing delimiter, then typing a newline
+automatically inserts an extra newline after point (possibly indenting
+the empty line point is on, depending on the major mode).  When set to
+@code{nil}, typing a newline inserts only one newline before point, as
+usual.
 
 @item
 @vindex electric-pair-skip-whitespace
-@code{electric-pair-skip-whitespace}, when non-@code{nil}, causes the minor
-mode to skip whitespace forward before deciding whether to skip over
-the closing delimiter.
+When @code{electric-pair-skip-whitespace} has its default non-@code{nil}
+value and point is separated from a closing delimiter only by
+whitespace, then typing a closing delimiter of the same type does not
+insert that character but instead moves point to immediately after the
+already present closing delimiter.  You can also set this option to
+additionally delete any whitespace that point moves over.  When set to
+@code{nil}, typing a closing delimiter simply inserts that character
+(even when this makes the following closing delimiter of the same type
+unbalanced).
 @end itemize
-
-To toggle Electric Pair mode, type @kbd{M-x electric-pair-mode}.  To
-toggle the mode in a single buffer, use @kbd{M-x
-electric-pair-local-mode}.
 
 @node Comments
 @section Manipulating Comments
@@ -1406,7 +1487,7 @@ line shows how many manual pages are available.
 @vindex Man-prefer-synchronous-call
   By default, @kbd{M-x man} calls the @code{man} program
 asynchronously.  You can force the invocation to be synchronous by
-customizing @code{Man-prefer-synchronous-calls} to a non-@code{nil}
+customizing @code{Man-prefer-synchronous-call} to a non-@code{nil}
 value.
 
 @vindex Man-support-remote-systems
@@ -1477,6 +1558,7 @@ Global ElDoc mode, which is turned on by default, and turns on the
 ElDoc mode in buffers whose major mode sets the variables described
 below.  Use @w{@kbd{M-x global-eldoc-mode}} to turn it off globally.
 
+@cindex eglot, using with ElDoc
 Various major modes configure the Global ElDoc mode to use their
 documentation functions.  Examples include Emacs Lisp mode, Python
 mode, and Cfengine mode.  In addition, Emacs features that provide
@@ -1662,6 +1744,7 @@ but you can also complete symbol names in ordinary Emacs buffers.
 @findex completion-at-point@r{, in programming language modes}
 @cindex Lisp symbol completion
 @cindex completion (Lisp symbols)
+@cindex code completion
   In most programming language modes, @kbd{C-M-i} (or
 @kbd{M-@key{TAB}}@footnote{
 On graphical displays, the @kbd{M-@key{TAB}} key is usually reserved
@@ -1673,6 +1756,7 @@ uses the available support facilities to come up with the completion
 candidates:
 
 @itemize @bullet
+@cindex eglot, using to complete symbol at point
 @item
 If Eglot is activated for the current buffer's project
 (@pxref{Projects}) and the current buffer's major mode, the command

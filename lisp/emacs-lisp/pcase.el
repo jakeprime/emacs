@@ -1,6 +1,6 @@
 ;;; pcase.el --- ML-style pattern-matching macro for Elisp -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2025 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Keywords: extensions
@@ -181,7 +181,6 @@ Emacs Lisp manual for more information and examples."
   (let* ((main (documentation (symbol-function 'pcase) 'raw))
          (ud (help-split-fundoc main 'pcase)))
     (require 'help-fns)
-    (declare-function help-fns-short-filename "help-fns" (filename))
     (declare-function help-fns--signature "help-fns"
                       (function doc real-def real-function buffer))
     (with-temp-buffer
@@ -214,7 +213,9 @@ Emacs Lisp manual for more information and examples."
               (save-excursion
                 (forward-char -1)
                 (insert (format-message "  in `"))
-                (help-insert-xref-button (help-fns-short-filename filename)
+                ;; `file-name-nondirectory' is naive, but
+                ;; `help-fns-short-filename' is not fast enough yet (bug#73766).
+                (help-insert-xref-button (file-name-nondirectory filename)
                                          'help-function-def symbol filename
                                          'pcase-macro)
                 (insert (format-message "'."))))
@@ -829,16 +830,8 @@ A and B can be one of:
       (let* ((test (cadr (cadr upat)))
              (res (pcase--split-pred vars `(pred ,test) pat)))
         (cons (cdr res) (car res))))
-     ((let ((otherpred
-             (cond ((eq 'pred (car-safe pat)) (cadr pat))
-                   ((not (eq 'quote (car-safe pat))) nil)
-                   ((consp (cadr pat)) #'consp)
-                   ((stringp (cadr pat)) #'stringp)
-                   ((vectorp (cadr pat)) #'vectorp)
-                   ((compiled-function-p (cadr pat))
-                    #'compiled-function-p))))
-        (and otherpred
-             (pcase--mutually-exclusive-p (cadr upat) otherpred)))
+     ((and (eq 'pred (car-safe pat))
+           (pcase--mutually-exclusive-p (cadr upat) (cadr pat)))
       '(:pcase--fail . nil))
      ;; Since we turn (or 'a 'b 'c) into (pred (memq _ '(a b c)))
      ;; try and preserve the info we get from that memq test.
@@ -852,7 +845,8 @@ A and B can be one of:
           '(:pcase--fail . nil))))
      ((and (eq 'quote (car-safe pat))
            (symbolp (cadr upat))
-           (or (symbolp (cadr pat)) (stringp (cadr pat)) (numberp (cadr pat)))
+           (or (get (cadr upat) 'pure)  ;FIXME: Drop this `or'?
+               (symbolp (cadr pat)) (stringp (cadr pat)) (numberp (cadr pat)))
            (get (cadr upat) 'side-effect-free)
            (ignore-errors
              (setq test (list (funcall (cadr upat) (cadr pat))))))
@@ -864,13 +858,36 @@ A and B can be one of:
   (or (keywordp upat) (integerp upat) (stringp upat)))
 
 (defun pcase--app-subst-match (match sym fun nsym)
+  "Refine MATCH knowing that NSYM = (funcall FUN SYM)."
   (cond
    ((eq (car-safe match) 'match)
-    (if (and (eq sym (cadr match))
-             (eq 'app (car-safe (cddr match)))
-             (equal fun (nth 1 (cddr match))))
-        (pcase--match nsym (nth 2 (cddr match)))
-      match))
+    (cond
+     ((not (eq sym (cadr match))) match)
+     ((and (eq 'app (car-safe (cddr match)))
+           (equal fun (nth 1 (cddr match))))
+      ;; MATCH is (match SYM app FUN UPAT), so we can refine it to refer to
+      ;; NSYM rather than re-compute (funcall FUN SYM).
+      (pcase--match nsym (nth 2 (cddr match))))
+     ((eq 'quote (car-safe (cddr match)))
+      ;; MATCH is (match SYM quote VAL), so we can decompose it into
+      ;; (match NSYM quote (funcall FUN VAL)) plus a check that
+      ;; the part of VAL not included in (funcall FUN VAL) still
+      ;; result is SYM matching (quote VAL).  (bug#71398)
+      (condition-case nil
+          `(and (match ,nsym . ',(funcall fun (nth 3 match)))
+                ;; FIXME: "the part of VAL not included in (funcall FUN VAL)"
+                ;; is hard to define for arbitrary FUN.  We do it only when
+                ;; FUN is `c[ad]r', and for the rest we just preserve
+                ;; the original `match' which is not optimal but safe.
+                ,(if (and (memq fun '(car cdr car-safe cdr-safe))
+                          (consp (nth 3 match)))
+                     (let ((otherfun (if (memq fun '(car car-safe))
+                                         #'cdr-safe #'car-safe)))
+                       `(match ,(cadr match) app ,otherfun
+                               ',(funcall otherfun (nth 3 match))))
+                   match))
+        (error match)))
+     (t match)))
    ((memq (car-safe match) '(or and))
     `(,(car match)
       ,@(mapcar (lambda (match)
@@ -1124,21 +1141,36 @@ The predicate is the logical-AND of:
  - True!  (The second element can be anything, and for the sake
    of the body forms, its value is bound to the symbol `forum'.)"
   (declare (debug (pcase-QPAT)))
+  (pcase--expand-\` qpat))
+
+(defun pcase--expand-\` (qpat)
   (cond
    ((eq (car-safe qpat) '\,) (cadr qpat))
-   ((eq (car-safe qpat) '\,@) (error "Unsupported QPAT: %S" qpat))
+   ((or (eq (car-safe qpat) '\,@) (eq qpat '...))
+    (error "Unsupported QPAT: %S" qpat))
    ((vectorp qpat)
-    `(and (pred vectorp)
-          (app length ,(length qpat))
-          ,@(let ((upats nil))
-              (dotimes (i (length qpat))
-                (push `(app (aref _ ,i) ,(list '\` (aref qpat i)))
-                      upats))
-              (nreverse upats))))
+    (let* ((trivial t)
+           (contents nil)
+           (upats nil))
+      (dotimes (i (length qpat))
+        (let* ((upat (pcase--expand-\` (aref qpat i))))
+          (if (eq (car-safe upat) 'quote)
+              (push (cadr upat) contents)
+            (setq trivial nil))
+          (push `(app (aref _ ,i) ,upat) upats)))
+      (if trivial
+          `',(apply #'vector (nreverse contents))
+        `(and (pred vectorp)
+              (app length ,(length qpat))
+              ,@(nreverse upats)))))
    ((consp qpat)
-    `(and (pred consp)
-          (app car-safe ,(list '\` (car qpat)))
-          (app cdr-safe ,(list '\` (cdr qpat)))))
+    (let ((upata (pcase--expand-\` (car qpat)))
+          (upatd (pcase--expand-\` (cdr qpat))))
+      (if (and (eq (car-safe upata) 'quote) (eq (car-safe upatd) 'quote))
+          `'(,(cadr upata) . ,(cadr upatd))
+        `(and (pred consp)
+              (app car-safe ,upata)
+              (app cdr-safe ,upatd)))))
    ((or (stringp qpat) (numberp qpat) (symbolp qpat)) `',qpat)
    ;; In all other cases just raise an error so we can't break
    ;; backward compatibility when adding \` support for other

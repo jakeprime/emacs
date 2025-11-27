@@ -1,6 +1,6 @@
 ;;; fontset.el --- commands for handling fontset  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1997-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1997-2025 Free Software Foundation, Inc.
 ;; Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
 ;;   2005, 2006, 2007, 2008, 2009, 2010, 2011
 ;;   National Institute of Advanced Industrial Science and Technology (AIST)
@@ -243,6 +243,8 @@
 	(lydian #x10920)
 	(kharoshthi #x10A00)
 	(manichaean #x10AC0)
+	(avestan #x10B00)
+	(old-turkic #x10C00 #x10C01)
 	(hanifi-rohingya #x10D00 #x10D24 #x10D39)
 	(yezidi #x10E80)
 	(old-sogdian #x10F00)
@@ -252,6 +254,7 @@
 	(old-uyghur #x10F70)
         (brahmi #x11013 #x11045 #x11052 #x11065)
         (kaithi #x1108D #x110B0 #x110BD)
+        (chakma #x11103 #x11127)
 	(mahajani #x11150)
         (sharada #x11191 #x111B3 #x111CD)
 	(khojki #x11200)
@@ -697,10 +700,11 @@
 	  (nil . "JISX0213.2004-1")
 	  ,(font-spec :registry "iso10646-1" :lang 'ja)
 	  ,(font-spec :registry "iso10646-1" :lang 'zh)
-          ;; This is required, as otherwise many TrueType fonts with
-          ;; CJK characters but no corresponding ``design language''
-          ;; declaration can't be found.
-          ,(font-spec :registry "iso10646-1" :script 'han))
+          ;; This is required on Android, as otherwise many TrueType
+          ;; fonts with CJK characters but no corresponding ``design
+          ;; language'' declaration can't be found.
+          ,@(and (featurep 'android)
+                 (list (font-spec :registry "iso10646-1" :script 'han))))
 
      (cjk-misc (nil . "GB2312.1980-0")
 	       (nil . "JISX0208*")
@@ -723,7 +727,9 @@
                ;; This is required, as otherwise many TrueType fonts
                ;; with CJK characters but no corresponding ``design
                ;; language'' declaration can't be found.
-               ,(font-spec :registry "iso10646-1" :script 'cjk-misc))
+               ,@(and (featurep 'android)
+                      (list (font-spec :registry "iso10646-1"
+                                       :script 'cjk-misc))))
 
      (hangul (nil . "KSC5601.1987-0")
 	     ,(font-spec :registry "iso10646-1" :lang 'ko))
@@ -829,11 +835,13 @@
                     yezidi
 		    kharoshthi
 		    manichaean
+		    avestan
                     chorasmian
 		    elymaic
                     old-uyghur
                     brahmi
                     kaithi
+                    chakma
                     sharada
                     grantha
                     tirhuta
@@ -849,6 +857,7 @@
 		    pahawh-hmong
 		    medefaidrin
                     znamenny-musical-notation
+                    old-turkic
 		    byzantine-musical-symbol
 		    musical-symbol
 		    ancient-greek-musical-notation

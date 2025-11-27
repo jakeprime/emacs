@@ -1,6 +1,6 @@
 ;;; info.el --- Info package for Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985-1986, 1992-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1985-1986, 1992-2025 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: help
@@ -4666,7 +4666,6 @@ Advanced commands:
     ("java" . "ccmode") ("idl" . "ccmode") ("pike" . "ccmode")
     ("skeleton" . "autotype") ("auto-insert" . "autotype")
     ("copyright" . "autotype") ("executable" . "autotype")
-    ("time-stamp" . "autotype")
     ("tempo" . "autotype") ("hippie-expand" . "autotype")
     ("cvs" . "pcl-cvs") ("ada" . "ada-mode") "calc"
     ("calcAlg" . "calc") ("calcDigit" . "calc") ("calcVar" . "calc")
@@ -5675,7 +5674,9 @@ completion alternatives to currently visited manuals."
 			   (all-completions
 			    ""
 			    (apply-partially #'Info-read-node-name-2
-					     Info-directory-list
+					     (append
+                                              Info-directory-list
+                                              Info-additional-directory-list)
 					     (mapcar #'car Info-suffix-list))))))))
 
 (provide 'info)

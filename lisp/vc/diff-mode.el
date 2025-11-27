@@ -1,6 +1,6 @@
 ;;; diff-mode.el --- a mode for viewing/editing context diffs -*- lexical-binding: t -*-
 
-;; Copyright (C) 1998-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2025 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Keywords: convenience patch diff vc
@@ -1502,8 +1502,9 @@ else cover the whole buffer."
 ;;;###autoload
 (define-derived-mode diff-mode fundamental-mode "Diff"
   "Major mode for viewing/editing context diffs.
-Supports unified and context diffs as well as (to a lesser extent)
-normal diffs.
+Supports unified and context diffs as well as, to a lesser extent, diffs
+in the old \"normal\" format.  (Unified diffs have become the standard,
+most commonly encountered format.)
 
 When the buffer is read-only, the ESC prefix is not necessary.
 If you edit the buffer manually, `diff-mode' will try to update the hunk
@@ -2738,7 +2739,7 @@ fixed, visit it in a buffer."
                 (?- . (left-fringe diff-fringe-del diff-indicator-removed))
                 (?! . (left-fringe diff-fringe-rep diff-indicator-changed))
                 (?\s . (left-fringe diff-fringe-nul fringe)))))))))
-    ;; Mimicks the output of Magit's diff.
+    ;; Mimics the output of Magit's diff.
     ;; FIXME: This has only been tested with Git's diff output.
     ;; FIXME: Add support for Git's "rename from/to"?
     (while (re-search-forward "^diff " limit t)
@@ -2883,9 +2884,6 @@ and the position in MAX."
          (buffer (cdr entry)))
     (if (buffer-live-p buffer)
         (progn
-          ;; Don't re-initialize the buffer (which would throw
-          ;; away the previous fontification work).
-          (setq file nil)
           (setq diff--cached-revision-buffers
                 (cons entry
                       (delq entry diff--cached-revision-buffers))))
@@ -2905,7 +2903,8 @@ and the position in MAX."
     (diff--cache-schedule-clean)
     (and buffer
          (with-current-buffer buffer
-           (diff-syntax-fontify-props file text line-nb)))))
+           ;; Major mode is set in vc-find-revision-no-save already.
+           (diff-syntax-fontify-props nil text line-nb)))))
 
 (defun diff-syntax-fontify-hunk (beg end old)
   "Highlight source language syntax in diff hunk between BEG and END.

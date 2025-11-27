@@ -1,6 +1,6 @@
 /* System description file for Windows NT.
 
-Copyright (C) 1993-1995, 2001-2024 Free Software Foundation, Inc.
+Copyright (C) 1993-1995, 2001-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -603,7 +603,7 @@ typedef unsigned int EMACS_UINT;
 
    Starting with MSVC 5.0, we must also place the uninitialized data
    into its own section.  VC5 intermingles uninitialized data from the CRT
-   between Emacs' static uninitialized data and its public uninitialized
+   between Emacs's static uninitialized data and its public uninitialized
    data.  A separate .bss section for Emacs groups both static and
    public uninitialized together.
 

@@ -1,6 +1,6 @@
 ;;; saveplace.el --- automatically save place in files  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1993-1994, 2001-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1994, 2001-2025 Free Software Foundation, Inc.
 
 ;; Author: Karl Fogel <kfogel@red-bean.com>
 ;; Maintainer: emacs-devel@gnu.org
@@ -151,7 +151,7 @@ different hosts.
 Changing this option requires rewriting `save-place-alist' with
 corresponding file name format, therefore setting this option
 just using `setq' may cause out-of-sync problems.  You should use
-either `setopt' or M-x customize-variable to set this option."
+either `setopt' or \\[customize-variable] to set this option."
   :type 'boolean
   :set (lambda (sym val)
          (set-default sym val)

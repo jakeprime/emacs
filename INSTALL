@@ -1,5 +1,5 @@
 GNU Emacs Installation Guide
-Copyright (C) 1992, 1994, 1996-1997, 2000-2024 Free Software Foundation,
+Copyright (C) 1992, 1994, 1996-1997, 2000-2025 Free Software Foundation,
 Inc.
 See the end of the file for license conditions.
 
@@ -65,7 +65,7 @@ sections if you need to.
 
 		 ./configure --prefix=/SOME/OTHER/DIRECTORY
 
-      where /SOME/OTHER/DIRECTORY is a directory writeable by your user,
+      where /SOME/OTHER/DIRECTORY is a directory writable by your user,
       for example, a subdirectory of your home directory.
 
   3. When 'configure' finishes, it prints several lines of details
@@ -470,7 +470,7 @@ should put emacs and its data files.  This defaults to '/usr/local'.
 
 If you don't have write access to the default '/usr/local' tree, and
 cannot have root access (without which "make install" will fail),
-specify '--prefix=PREFIXDIR' where PREFIXDIR is a directyory writeable
+specify '--prefix=PREFIXDIR' where PREFIXDIR is a directory writable
 by your user, for example your HOME directory or some subdirectory of
 it.
 
@@ -670,6 +670,12 @@ install Emacs's libraries and data files or where Emacs should search
 for its Lisp files by giving values for 'make' variables as part of
 the command.  See the section below called 'MAKE VARIABLES' for more
 information on this.
+
+If the directories where 'make install' installs files are not writable
+by your user, you might prefer invoking 'make && sudo make install'
+instead.  This first invokes 'make' to make sure all the required files
+are rebuilt with your user's permissions and ownership, and then
+installs them using the permissions of root.
 
 7) Check the file 'dir' in your site's info directory (usually
 /usr/local/share/info) to make sure that it has a menu entry for the

@@ -1,6 +1,6 @@
 ;;; touch-screen.el --- touch screen support for X and Android  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2023-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2023-2025 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Package: emacs
@@ -23,8 +23,8 @@
 ;;; Commentary:
 
 ;; This file provides code to recognize simple touch screen gestures.
-;; It is used on X and Android, currently the only systems where Emacs
-;; supports touch input.
+;; It is used on X, PGTK, Android, and MS-Windows, currently the only
+;; systems where Emacs supports touch input.
 ;;
 ;; See (elisp)Touchscreen Events for a description of the details of
 ;; touch events.
@@ -937,8 +937,8 @@ text scale by the ratio therein."
                               (aset touch-screen-aux-tool 7
                                     current-scale)))
         ;; Set the text scale.
-        (text-scale-set (+ start-scale
-                           (round (log scale text-scale-mode-step))))
+        (text-scale-set (floor (+ (round (log scale text-scale-mode-step))
+                                  start-scale)))
         ;; Subsequently move the row which was at the centrum to its Y
         ;; position.
         (if (and (not (eq current-scale
@@ -1211,48 +1211,35 @@ last such event."
             (initial-distance (aref touch-screen-aux-tool 4))
             (initial-centrum (aref touch-screen-aux-tool 5)))
         (let* ((ratio (/ distance initial-distance))
-               (ratio-diff (- ratio (aref touch-screen-aux-tool 6)))
-               (diff (abs (- ratio (aref touch-screen-aux-tool 6))))
-               (centrum-diff (+ (abs (- (car initial-centrum)
-                                        (car centrum)))
-                                (abs (- (cdr initial-centrum)
-                                        (cdr centrum))))))
-          ;; If the difference in ratio has surpassed a threshold of
-          ;; 0.2 or the centrum difference exceeds the frame's char
-          ;; width, send a touchscreen-pinch event with this
-          ;; information and update that saved in
-          ;; touch-screen-aux-tool.
-          (when (or (> diff 0.2)
-                    (> centrum-diff
-                       (/ (frame-char-width) 2)))
-            (aset touch-screen-aux-tool 5 centrum)
-            (aset touch-screen-aux-tool 6 ratio)
-            (throw 'input-event
-                   (list 'touchscreen-pinch
-                         (if (or (<= (car centrum) 0)
-                                 (<= (cdr centrum) 0))
+               (ratio-diff (- ratio (aref touch-screen-aux-tool 6))))
+          ;; Update the internal record of its position and generate an
+          ;; event.
+          (aset touch-screen-aux-tool 5 centrum)
+          (aset touch-screen-aux-tool 6 ratio)
+          (throw 'input-event
+                 (list 'touchscreen-pinch
+                       (if (or (<= (car centrum) 0)
+                               (<= (cdr centrum) 0))
+                           (list window nil centrum nil nil
+                                 nil nil nil nil nil)
+                         (let ((posn (posn-at-x-y (car centrum)
+                                                  (cdr centrum)
+                                                  window)))
+                           (if (eq (posn-window posn)
+                                   window)
+                               posn
+                             ;; Return a placeholder outside the window
+                             ;; if the centrum has moved beyond the
+                             ;; confines of the window where the gesture
+                             ;; commenced.
                              (list window nil centrum nil nil
-                                   nil nil nil nil nil)
-                           (let ((posn (posn-at-x-y (car centrum)
-                                                    (cdr centrum)
-                                                    window)))
-                             (if (eq (posn-window posn)
-                                     window)
-                                 posn
-                               ;; Return a placeholder
-                               ;; outside the window if
-                               ;; the centrum has moved
-                               ;; beyond the confines of
-                               ;; the window where the
-                               ;; gesture commenced.
-                               (list window nil centrum nil nil
-                                     nil nil nil nil nil))))
-                         ratio
-                         (- (car centrum)
-                            (car initial-centrum))
-                         (- (cdr centrum)
-                            (cdr initial-centrum))
-                         ratio-diff))))))))
+                                   nil nil nil nil nil))))
+                       ratio
+                       (- (car centrum)
+                          (car initial-centrum))
+                       (- (cdr centrum)
+                          (cdr initial-centrum))
+                       ratio-diff)))))))
 
 (defun touch-screen-window-selection-changed (frame)
   "Notice that FRAME's selected window has changed.
@@ -1503,9 +1490,9 @@ If INTERACTIVE, execute the command associated with any event
 generated instead of throwing `input-event'.  Otherwise, throw
 `input-event' with a single input event if that event should take
 the place of EVENT within the key sequence being translated, or
-`nil' if all tools have been released.
+nil if all tools have been released.
 
-Set `touch-screen-events-received' to `t' to indicate that touch
+Set `touch-screen-events-received' to t to indicate that touch
 screen events have been received, and thus by extension require
 functions undertaking event management themselves to call
 `read-key' rather than `read-event'."
@@ -1764,6 +1751,7 @@ functions undertaking event management themselves to call
 
 (put 'mouse-drag-region 'ignored-mouse-command t)
 
+;;;###autoload
 (defun touch-screen-translate-touch (prompt)
   "Translate touch screen events into a sequence of mouse events.
 PROMPT is the prompt string given to `read-key-sequence', or nil
@@ -1852,10 +1840,17 @@ if POSN is on a link or a button, or `mouse-1' otherwise."
         ;; no key events have been translated.
         (if event (or (and prefix (consp event)
                            ;; Only generate virtual function keys for
-                           ;; mouse events.
+                           ;; mouse events...
                            (memq (car event)
                                  '(down-mouse-1 mouse-1
                                    mouse-2 mouse-movement))
+                           ;; .. and provided that Emacs has never
+                           ;; previously encountered an event of this
+                           ;; description, so that its `event-kind'
+                           ;; property has yet to be initialized and
+                           ;; keyboard.c will not understand whether and
+                           ;; how to append a function key prefix.
+                           (null (get (car event) 'event-kind))
                            ;; If this is a mode line event, then
                            ;; generate the appropriate function key.
                            (vector prefix event))
@@ -2070,10 +2065,10 @@ sent until the touch sequence currently being translated ends.
 Must be called from a command bound to a `touchscreen-hold' or
 `touchscreen-drag' event."
   (let* ((tool touch-screen-current-tool)
-         (current-what (nth 4 tool)))
-    ;; Signal an error if no hold or drag is in progress.
-    (when (and (not (eq current-what 'hold)
-                    (eq current-what 'drag)))
+         (current-what (nth 3 tool)))
+    ;; Signal an error if no hold and no drag is in progress.
+    (when (and (not (eq current-what 'held))
+               (not (eq current-what 'drag)))
       (error "Calling `touch-screen-inhibit-drag' outside hold or drag"))
     ;; Now set the fourth element of tool to `command-inhibit'.
     (setcar (nthcdr 3 tool) 'command-inhibit)))
@@ -2082,4 +2077,4 @@ Must be called from a command bound to a `touchscreen-hold' or
 
 (provide 'touch-screen)
 
-;;; touch-screen ends here
+;;; touch-screen.el ends here

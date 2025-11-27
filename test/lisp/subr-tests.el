@@ -1,6 +1,6 @@
 ;;; subr-tests.el --- Tests for subr.el  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2015-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2015-2025 Free Software Foundation, Inc.
 
 ;; Author: Oleh Krehel <ohwoeowho@gmail.com>,
 ;;         Nicolas Petton <nicolas@petton.fr>
@@ -454,7 +454,11 @@
                    x)))
     (should (= x 2)))
   (should (equal (macroexpand-all '(when a b c d))
-                 '(if a (progn b c d)))))
+                 '(if a (progn b c d))))
+  (with-suppressed-warnings ((empty-body when unless))
+    (should (equal (when t) nil))
+    (should (equal (unless t) nil))
+    (should (equal (unless nil) nil))))
 
 (ert-deftest subr-test-xor ()
   "Test `xor'."

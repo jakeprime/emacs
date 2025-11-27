@@ -2,7 +2,7 @@
 @c %**start of header
 @setfilename ../../info/erc.info
 @settitle ERC Manual
-@set ERCVER 5.6
+@set ERCVER 5.6.0.30.1
 @set ERCDIST as distributed with Emacs @value{EMACSVER}
 @include docstyle.texi
 @syncodeindex fn cp
@@ -12,7 +12,7 @@
 @copying
 This manual is for ERC @value{ERCVER} @value{ERCDIST}.
 
-Copyright @copyright{} 2005--2024 Free Software Foundation, Inc.
+Copyright @copyright{} 2005--2025 Free Software Foundation, Inc.
 
 @quotation
 Permission is granted to copy, distribute and/or modify this document
@@ -411,8 +411,9 @@ Kill current input line using @code{erc-bol} followed by @code{kill-line}.
 One way to add functionality to ERC is to customize which of its many
 modules are loaded.
 
-There is a spiffy customize interface, which may be reached by typing
-@kbd{M-x customize-option @key{RET} erc-modules @key{RET}}.  When
+You can do this by typing @kbd{C-h v erc-modules @key{RET}} and clicking
+@samp{customize} near the bottom of the resulting help buffer, where it
+says ``You can @emph{customize} this variable.''  When
 removing a module outside of Customize, you may wish to ensure it's
 disabled by invoking its associated minor-mode toggle with a
 nonpositive prefix argument, for example, @kbd{C-u - M-x
@@ -850,7 +851,7 @@ Examples of use:
 
 In the case of @code{:client-certificate t}, you will need to add a
 line like the following to your authinfo file
-(e.g. @file{~/.authinfo.gpg}):
+(for example, @file{~/.authinfo.gpg}):
 
 @example
 machine irc.libera.chat key /home/bandali/my-cert.key cert /home/bandali/my-cert.crt
@@ -867,8 +868,8 @@ ERC's auth-source integration}.
 @defun erc-compute-server &optional server
 Return an IRC server name.
 
-This tries a number of increasingly more default methods until a non-@code{nil}
-value is found.
+This tries a progressively greater number of default methods until a
+non-@code{nil} value is found.
 
 @itemize @bullet
 @item @var{server} (the argument passed to this function)
@@ -888,8 +889,8 @@ IRC server to use if one is not provided.
 @defun erc-compute-port &optional port
 Return a port for an IRC server.
 
-This tries a number of increasingly more default methods until a non-@code{nil}
-value is found.
+This tries a progressively greater number of default methods until a
+non-@code{nil} value is found.
 
 @itemize @bullet
 @item @var{port} (the argument passed to this function)
@@ -910,7 +911,7 @@ This can be either a string or a number.
 @defun erc-compute-nick &optional nick
 Return user's IRC nick.
 
-This tries a number of increasingly more default methods until a
+This tries a progressively greater number of default methods until a
 non-@code{nil} value is found.
 
 @itemize
@@ -1010,7 +1011,7 @@ auth-source facility to retrieve a server password, although hitting
 @defun erc-compute-full-name &optional full-name
 Return user's full name.
 
-This tries a number of increasingly more default methods until a
+This tries a progressively greater number of default methods until a
 non-@code{nil} value is found.
 
 @itemize @bullet
@@ -2127,7 +2128,7 @@ to IRC, and don't forget that you can roll back to the previous
 version by running @kbd{M-x package-delete @key{RET}}.
 @xref{Packages,,,emacs, The Emacs Editor}, for more information.
 
-Note that a bug affecting Emacs' packaging machinery may prevent the
+Note that a bug affecting Emacs's packaging machinery may prevent the
 above method from working on Emacs versions 29 and below.  Users on 29
 can try running @kbd{C-u M-x package-install @key{RET}} instead.
 Users on 28 and below can click on the @emph{installed} @samp{erc}

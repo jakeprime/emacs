@@ -1,6 +1,6 @@
 ;;; mail-source.el --- functions for fetching mail  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1999-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2025 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: news, mail
@@ -201,8 +201,8 @@ Leave mails for this many days" :value 14)))))
 					   (string :tag "Program"))
 				    (group :inline t
 					   (const :format ""
-						  :value :authenticator)
-					   (choice :tag "Authenticator"
+						  :value :authentication)
+					   (choice :tag "Authentication"
 						   :value login
 						   ,@mail-source-imap-authenticators))
 				    (group :inline t

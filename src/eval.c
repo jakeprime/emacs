@@ -1,6 +1,6 @@
 /* Evaluator for GNU Emacs Lisp interpreter.
 
-Copyright (C) 1985-1987, 1993-1995, 1999-2024 Free Software Foundation,
+Copyright (C) 1985-1987, 1993-1995, 1999-2025 Free Software Foundation,
 Inc.
 
 This file is part of GNU Emacs.
@@ -1018,8 +1018,8 @@ usage: (let* VARLIST BODY...)  */)
 	}
 
       var = maybe_remove_pos_from_symbol (var);
-      if (!NILP (lexenv) && BARE_SYMBOL_P (var)
-	  && !XBARE_SYMBOL (var)->u.s.declared_special
+      CHECK_TYPE (BARE_SYMBOL_P (var), Qsymbolp, var);
+      if (!NILP (lexenv) && !XBARE_SYMBOL (var)->u.s.declared_special
 	  && NILP (Fmemq (var, Vinternal_interpreter_environment)))
 	/* Lexically bind VAR by adding it to the interpreter's binding
 	   alist.  */
@@ -1090,10 +1090,10 @@ usage: (let VARLIST BODY...)  */)
       varlist = XCDR (varlist);
       Lisp_Object var = maybe_remove_pos_from_symbol (SYMBOLP (elt) ? elt
 						      : Fcar (elt));
+      CHECK_TYPE (BARE_SYMBOL_P (var), Qsymbolp, var);
       tem = temps[argnum];
 
-      if (!NILP (lexenv) && SYMBOLP (var)
-	  && !XSYMBOL (var)->u.s.declared_special
+      if (!NILP (lexenv) && !XBARE_SYMBOL (var)->u.s.declared_special
 	  && NILP (Fmemq (var, Vinternal_interpreter_environment)))
 	/* Lexically bind VAR by adding it to the lexenv alist.  */
 	lexenv = Fcons (Fcons (var, tem), lexenv);
@@ -1492,7 +1492,7 @@ internal_lisp_condition_case (Lisp_Object var, Lisp_Object bodyform,
   ptrdiff_t CACHEABLE clausenb = 0;
 
   var = maybe_remove_pos_from_symbol (var);
-  CHECK_SYMBOL (var);
+  CHECK_TYPE (BARE_SYMBOL_P (var), Qsymbolp, var);
 
   Lisp_Object success_handler = Qnil;
 
@@ -1817,7 +1817,7 @@ See also the function `condition-case'.  */
   (Lisp_Object error_symbol, Lisp_Object data)
 {
   /* If they call us with nonsensical arguments, produce "peculiar error".  */
-  if (NILP (error_symbol) && NILP (data))
+  if (NILP (error_symbol) && !CONSP (data))
     error_symbol = Qerror;
   signal_or_quit (error_symbol, data, false);
   eassume (false);
@@ -2534,7 +2534,7 @@ eval_sub (Lisp_Object form)
   else if (!NILP (fun) && (fun = XSYMBOL (fun)->u.s.function, SYMBOLP (fun)))
     fun = indirect_function (fun);
 
-  if (SUBRP (fun) && !SUBR_NATIVE_COMPILED_DYNP (fun))
+  if (SUBRP (fun) && !NATIVE_COMP_FUNCTION_DYNP (fun))
     {
       Lisp_Object args_left = original_args;
       ptrdiff_t numargs = list_length (args_left);
@@ -2640,7 +2640,7 @@ eval_sub (Lisp_Object form)
 	}
     }
   else if (CLOSUREP (fun)
-	   || SUBR_NATIVE_COMPILED_DYNP (fun)
+	   || NATIVE_COMP_FUNCTION_DYNP (fun)
 	   || MODULE_FUNCTIONP (fun))
     return apply_lambda (fun, original_args, count);
   else
@@ -3036,10 +3036,10 @@ funcall_general (Lisp_Object fun, ptrdiff_t numargs, Lisp_Object *args)
       && (fun = XSYMBOL (fun)->u.s.function, SYMBOLP (fun)))
     fun = indirect_function (fun);
 
-  if (SUBRP (fun) && !SUBR_NATIVE_COMPILED_DYNP (fun))
+  if (SUBRP (fun) && !NATIVE_COMP_FUNCTION_DYNP (fun))
     return funcall_subr (XSUBR (fun), numargs, args);
   else if (CLOSUREP (fun)
-	   || SUBR_NATIVE_COMPILED_DYNP (fun)
+	   || NATIVE_COMP_FUNCTION_DYNP (fun)
 	   || MODULE_FUNCTIONP (fun))
     return funcall_lambda (fun, numargs, args);
   else
@@ -3262,7 +3262,7 @@ funcall_lambda (Lisp_Object fun, ptrdiff_t nargs, Lisp_Object *arg_vector)
     return funcall_module (fun, nargs, arg_vector);
 #endif
 #ifdef HAVE_NATIVE_COMP
-  else if (SUBR_NATIVE_COMPILED_DYNP (fun))
+  else if (NATIVE_COMP_FUNCTION_DYNP (fun))
     {
       syms_left = XSUBR (fun)->lambda_list;
       lexenv = Qnil;
@@ -3280,18 +3280,18 @@ funcall_lambda (Lisp_Object fun, ptrdiff_t nargs, Lisp_Object *arg_vector)
     {
       maybe_quit ();
 
-      Lisp_Object next = XCAR (syms_left);
-      if (!SYMBOLP (next))
+      Lisp_Object next = maybe_remove_pos_from_symbol (XCAR (syms_left));
+      if (!BARE_SYMBOL_P (next))
 	xsignal1 (Qinvalid_function, fun);
 
-      if (EQ (next, Qand_rest))
+      if (BASE_EQ (next, Qand_rest))
         {
           if (rest || previous_rest)
             xsignal1 (Qinvalid_function, fun);
           rest = 1;
 	  previous_rest = true;
         }
-      else if (EQ (next, Qand_optional))
+      else if (BASE_EQ (next, Qand_optional))
         {
           if (optional || rest || previous_rest)
             xsignal1 (Qinvalid_function, fun);
@@ -3313,12 +3313,12 @@ funcall_lambda (Lisp_Object fun, ptrdiff_t nargs, Lisp_Object *arg_vector)
 	    arg = Qnil;
 
 	  /* Bind the argument.  */
-	  if (!NILP (lexenv) && SYMBOLP (next))
+	  if (!NILP (lexenv))
 	    /* Lexically bind NEXT by adding it to the lexenv alist.  */
 	    lexenv = Fcons (Fcons (next, arg), lexenv);
 	  else
 	    /* Dynamically bind NEXT.  */
-	    specbind (maybe_remove_pos_from_symbol (next), arg);
+	    specbind (next, arg);
 	  previous_rest = false;
 	}
     }
@@ -3335,9 +3335,9 @@ funcall_lambda (Lisp_Object fun, ptrdiff_t nargs, Lisp_Object *arg_vector)
   Lisp_Object val;
   if (CONSP (fun))
     val = Fprogn (XCDR (XCDR (fun)));
-  else if (SUBR_NATIVE_COMPILEDP (fun))
+  else if (NATIVE_COMP_FUNCTIONP (fun))
     {
-      eassert (SUBR_NATIVE_COMPILED_DYNP (fun));
+      eassert (NATIVE_COMP_FUNCTION_DYNP (fun));
       /* No need to use funcall_subr as we have zero arguments by
 	 construction.  */
       val = XSUBR (fun)->function.a0 ();

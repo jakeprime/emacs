@@ -1,6 +1,6 @@
 ;;; comp.el --- compilation of Lisp code into native code -*- lexical-binding: t -*-
 
-;; Copyright (C) 2019-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2019-2025 Free Software Foundation, Inc.
 
 ;; Author: Andrea Corallo <acorallo@gnu.org>
 ;; Keywords: lisp
@@ -75,7 +75,9 @@ This is intended for debugging the compiler itself.
   1 emit debug symbols.
   2 emit debug symbols and dump pseudo C code.
   3 emit debug symbols and dump: pseudo C code, GCC intermediate
-  passes and libgccjit log file."
+  passes and libgccjit log file.
+When generated, the pseudo C code is deposited in the same directory
+as the corresponding .eln file."
   :type 'natnum
   :safe #'natnump
   :version "29.1")
@@ -207,7 +209,7 @@ Useful to hook into pass checkers.")
 ;; cl-macs.el. We can't use `cl-deftype-satisfies' directly as the
 ;; relation type <-> predicate is not bijective (bug#45576).
 (defconst comp-known-predicates
-  ;; FIXME: Auto-generate (most of) it from `cl-deftype-satifies'?
+  ;; FIXME: Auto-generate (most of) it from `cl-deftype-satisfies'?
   '((arrayp              array)
     (atom		 atom)
     (bool-vector-p       bool-vector)
@@ -1055,7 +1057,7 @@ If DST-N is specified, use it; otherwise assume it to be the current slot."
   "Set constant VAL to current slot."
   (comp--add-const-to-relocs val)
   ;; Leave relocation index nil on purpose, will be fixed-up in final
-  ;; by `comp-finalize-relocs'.
+  ;; by `comp--finalize-relocs'.
   (comp--emit `(setimm ,(comp--slot) ,val)))
 
 (defun comp--make-curr-block (block-name entry-sp &optional addr)
@@ -2792,7 +2794,7 @@ Return t if something was changed."
                   finally
                   (when (= i 100)
                     (display-warning
-                     'comp
+                     'native-compiler
                      (format "fwprop pass jammed into %s?" (comp-func-name f))))
                   (comp-log (format "Propagation run %d times\n" i) 2))
                  (comp--rewrite-non-locals)
@@ -2847,7 +2849,7 @@ FUNCTION can be a function-name or byte compiled function."
              (subrp (subrp f))
              (comp-func-callee (comp--func-in-unit callee)))
         (cond
-         ((and subrp (not (subr-native-elisp-p f)))
+         ((and subrp (not (native-comp-function-p f)))
           ;; Trampoline removal.
           (let* ((callee (intern (subr-name f))) ; Fix aliased names.
                  (maxarg (cdr (subr-arity f)))
@@ -3583,6 +3585,8 @@ is a filename, if the compilation was successful return the
 filename of the compiled object.  If FUNCTION-OR-FILE is a
 function symbol or a form, if the compilation was successful
 return the compiled function."
+  (declare (ftype (function ((or string symbol) &optional string)
+                            (or native-comp-function string))))
   (comp--native-compile function-or-file nil output))
 
 ;;;###autoload
@@ -3652,12 +3656,22 @@ variable \"NATIVE_DISABLED\" is set, only byte compile."
       (setq command-line-args-left (cdr command-line-args-left)))))
 
 (defun native-compile-prune-cache ()
-  "Remove .eln files that aren't applicable to the current Emacs invocation."
+  "Remove *.eln files that aren't usable by the current Emacs build.
+
+This command removes all the *.eln files in `native-comp-eln-load-path'
+which are incompatible with the Emacs session in which you invoke this
+command.  This includes the *.eln files compiled by all the Emacs
+sessions where `comp-native-version-dir' had a value different from the
+current session.
+
+Note that this command does not prune the *.eln files in the last
+directory in `native-comp-eln-load-path', which holds *.eln files
+compiled during the Emacs build process."
   (interactive)
   (unless (featurep 'native-compile)
     (user-error "This Emacs isn't built with native-compile support"))
-  ;; The last item in native-comp-eln-load-path is assumed to be a system
-  ;; directory, so don't try to delete anything there (bug#59658).
+  ;; The last directory in 'native-comp-eln-load-path' is assumed to be a
+  ;; system directory, so don't try to delete anything there (bug#59658).
   (dolist (dir (butlast native-comp-eln-load-path))
     ;; If a directory is non absolute it is assumed to be relative to
     ;; `invocation-directory'.

@@ -1,6 +1,6 @@
 ;;; rmail.el --- main code of "RMAIL" mail reader for Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985-1988, 1993-1998, 2000-2024 Free Software
+;; Copyright (C) 1985-1988, 1993-1998, 2000-2025 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -177,7 +177,10 @@ Its name should end with a slash."
   :group 'rmail)
 
 (defcustom rmail-movemail-program nil
-  "If non-nil, the file name of the `movemail' program."
+  "If non-nil, the file name of the `movemail' program.
+If you customize this after starting Rmail, reset the
+variable `rmail-movemail-variant-in-use' to the nil value,
+and then restart Rmail."
   :group 'rmail-retrieve
   :type '(choice (const nil) string))
 
@@ -462,7 +465,9 @@ as argument, to ask the user that question."
   "List of functions to call when Rmail is invoked.")
 
 (defvar rmail-get-new-mail-hook nil
-  "List of functions to call when Rmail has retrieved new mail.")
+  "List of functions to call when Rmail has retrieved new mail.
+The functions are called in `rmail-buffer' narrowed to include
+only the new email messages, with point at the first new mail.")
 
 ;;;###autoload
 (defcustom rmail-show-message-hook nil
@@ -517,8 +522,7 @@ For a given message, Rmail applies only the first matching directive.
 
 Examples:
   (\"/dev/null\" \"from\" \"@spam.com\") ; delete all mail from spam.com
-  (\"RMS\" \"from\" \"rms@\") ; save all mail from RMS.
-"
+  (\"RMS\" \"from\" \"rms@\") ; save all mail from RMS."
   :group 'rmail
   :version "21.1"
   :type '(repeat (sexp :tag "Directive")))
@@ -3684,7 +3688,12 @@ If BUFFER is not swapped, yank out of its message viewer buffer."
 				   other-headers)
   (let ((switch-function
 	 (cond (same-window nil)
-	       (rmail-mail-new-frame 'switch-to-buffer-other-frame)
+	       (rmail-mail-new-frame
+                (progn
+                  ;; Record the frame from which we invoked this command.
+                  (modify-frame-parameters (selected-frame)
+				           '((rmail-orig-frame . t)))
+                  'switch-to-buffer-other-frame))
 	       (t 'switch-to-buffer-other-window)))
 	yank-action)
     (if replybuffer
@@ -3713,6 +3722,11 @@ If BUFFER is not swapped, yank out of its message viewer buffer."
 	  ;; sendmail.el looks at it.
 	  (modify-frame-parameters (selected-frame)
 				   '((mail-dedicated-frame . t)))))))
+
+(defun rmail--find-orig-rmail-frame ()
+  (car (filtered-frame-list
+        (lambda (frame)
+          (eq (frame-parameter frame 'rmail-orig-frame) t)))))
 
 (defun rmail-mail-return (&optional newbuf)
   "Try to return to Rmail from the mail window.
@@ -3755,9 +3769,19 @@ to switch to."
    ;; probably wants to delete it now.
    ((display-multi-frame-p)
     (delete-frame))
-   ;; The previous frame is where normally they have the Rmail buffer
-   ;; displayed.
-   (t (other-frame -1))))
+   (t
+    ;; Try to find the original Rmail frame and make it the top frame.
+    (let ((fr (selected-frame))
+          (orig-fr (rmail--find-orig-rmail-frame)))
+      (if orig-fr
+          (progn
+            (modify-frame-parameters orig-fr '((rmail-orig-frame . nil)))
+            (select-frame-set-input-focus orig-fr))
+        ;; If we cannot find the frame from which we started, punt, and
+        ;; display the previous frame, which is where they normally have
+        ;; the Rmail buffer displayed.
+        (other-frame -1))
+      (delete-frame fr)))))
 
 (defun rmail-mail ()
   "Send mail in another window.
@@ -4293,7 +4317,7 @@ In fact, the non-nil value returned is the summary buffer itself."
        rmail-summary-buffer))
 
 (defun rmail-summary-displayed ()
-  "t if in RMAIL buffer and an associated summary buffer is displayed."
+  "Return t if in RMAIL buffer and an associated summary buffer is displayed."
   (and rmail-summary-buffer (get-buffer-window rmail-summary-buffer)))
 
 (defcustom rmail-redisplay-summary nil

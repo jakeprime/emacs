@@ -1,6 +1,6 @@
 ;;; keymap.el --- Keymap functions  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2021-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2021-2025 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: internal
@@ -60,7 +60,11 @@ DEFINITION is anything that can be a key's definition:
     keymap has been created with a menu name, see `make-keymap'),
  or a cons (MAP . CHAR), meaning use definition of CHAR in keymap MAP,
  or an extended menu item definition.
- (See info node `(elisp)Extended Menu Items'.)"
+ (See info node `(elisp)Extended Menu Items'.)
+
+The `key-description' convenience function converts a simple
+string of characters to an equivalent form that is acceptable for
+COMMAND."
   (declare (compiler-macro (lambda (form) (keymap--compile-check key) form)))
   (keymap--check key)
   ;; If we're binding this key to another key, then parse that other
@@ -83,6 +87,10 @@ as its DEFINITION argument.
 
 If COMMAND is a string (which can only happen when this function is
 called from Lisp), it must satisfy `key-valid-p'.
+
+The `key-description' convenience function converts a simple
+string of characters to an equivalent form that is acceptable for
+COMMAND.
 
 Note that if KEY has a local binding in the current buffer,
 that local binding will continue to shadow any global binding
@@ -107,6 +115,10 @@ as its DEFINITION argument.
 
 If COMMAND is a string (which can only happen when this function is
 called from Lisp), it must satisfy `key-valid-p'.
+
+The `key-description' convenience function converts a simple
+string of characters to an equivalent form that is acceptable for
+COMMAND.
 
 The binding goes in the current buffer's local keymap, which in most
 cases is shared with all other buffers in the same major mode."
@@ -319,21 +331,29 @@ KEYS should be a string consisting of one or more key strokes,
 with a single space character separating one key stroke from another.
 
 Each key stroke is either a single character, or the name of an
-event, surrounded by angle brackets <like-this>.  In addition, any
-key stroke may be preceded by one or more modifier keys.  Finally,
-a limited number of characters have a special shorthand syntax.
+event, surrounded by angle brackets <like-this>.  An event may be
+pushing a key, clicking on a menu item, pressing a mouse button, etc.
+In addition, any key stroke may be preceded by one or more modifier
+keys.  Finally, a limited number of characters have a special shorthand
+syntax.
 
 Here are some example of valid key sequences.
 
   \"f\"           (the key `f')
+  \"<f6>\"        (the function key named \"F6\")
+  \"<mouse-1>\"   (the mouse button named \"mouse-1\", commonly referred to as
+                 the left button)
   \"S o m\"       (a three-key sequence of the keys `S', `o' and `m')
   \"C-c o\"       (a two-key sequence: the key `c' with the control modifier
                  followed by the key `o')
-  \"H-<left>\"    (the function key named \"left\" with the hyper modifier)
+  \"H-<left>\"    (the cursor control key named \"left\" with the hyper modifier)
+  \"RET\"         (the \"return\" key, also available as \"C-m\")
+  \"<return>\"    (the \"<return>\" function key, which can be bound separately
+                 from \"RET\" on some systems)
   \"M-RET\"       (the \"return\" key with a meta modifier)
   \"C-M-<space>\" (the \"space\" key with both the control and meta modifiers)
 
-These are the characters that have special shorthand syntax:
+These characters have special shorthand syntax:
 NUL, RET, TAB, LFD, ESC, SPC, DEL.
 
 Modifiers have to be specified in this order:

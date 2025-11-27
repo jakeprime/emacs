@@ -1,6 +1,6 @@
 ;;; c-ts-common.el --- Utilities for C like Languages  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2023-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2023-2025 Free Software Foundation, Inc.
 
 ;; Maintainer : 付禹安 (Yuan Fu) <casouri@gmail.com>
 ;; Package    : emacs
@@ -151,7 +151,9 @@ comment."
          (orig-point (point-marker))
          (start-marker (point-marker))
          (end-marker nil)
-         (end-len 0))
+         (end-len 0)
+         (start-mask-done nil)
+         (end-mask-done nil))
     (move-marker start-marker start)
     ;; We mask "/*" and the space before "*/" like
     ;; `c-fill-paragraph' does.
@@ -162,6 +164,7 @@ comment."
                             (group "/") "*"))
         (goto-char (match-beginning 1))
         (move-marker start-marker (point))
+        (setq start-mask-done t)
         (replace-match " " nil nil nil 1))
 
       ;; Include whitespaces before /*.
@@ -179,6 +182,7 @@ comment."
         (goto-char (match-beginning 1))
         (setq end-marker (point-marker))
         (setq end-len (- (match-end 1) (match-beginning 1)))
+        (setq end-mask-done t)
         (replace-match (make-string end-len ?x)
                        nil nil nil 1))
 
@@ -206,11 +210,11 @@ comment."
         (fill-region (max start-marker para-start) (min end para-end) arg))
 
       ;; Unmask.
-      (when start-marker
+      (when (and start-mask-done start-marker)
         (goto-char start-marker)
         (delete-char 1)
         (insert "/"))
-      (when end-marker
+      (when (and end-mask-done end-marker)
         (goto-char end-marker)
         (delete-region (point) (+ end-len (point)))
         (insert (make-string end-len ?\s)))
@@ -291,51 +295,68 @@ and /* */ comments.  SOFT works the same as in
   ;; I want to experiment with explicitly listing out all each cases and
   ;; handle them separately, as opposed to fiddling with `comment-start'
   ;; and friends.  This will have more duplicate code and will be less
-  ;; generic, but in the same time might save us from writting cryptic
+  ;; generic, but in the same time might save us from writing cryptic
   ;; code to handle all sorts of edge cases.
   ;;
   ;; For this command, let's try to make it basic: if the current line
   ;; is a // comment, insert a newline and a // prefix; if the current
   ;; line is in a /* comment, insert a newline and a * prefix.  No
   ;; auto-fill or other smart features.
-  (cond
-   ;; Line starts with //, or ///, or ////...
-   ;; Or //! (used in rust).
-   ((save-excursion
-      (beginning-of-line)
-      (looking-at (rx "//" (group (* (any "/!")) (* " ")))))
-    (let ((whitespaces (match-string 1)))
-      (if soft (insert-and-inherit ?\n) (newline 1))
-      (delete-region (line-beginning-position) (point))
-      (insert "//" whitespaces)))
+  (let ((insert-line-break
+         (lambda ()
+	   (delete-horizontal-space)
+	   (if soft
+	       (insert-and-inherit ?\n)
+	     (newline 1)))))
+    (cond
+     ;; Line starts with //, or ///, or ////...
+     ;; Or //! (used in rust).
+     ((save-excursion
+        (beginning-of-line)
+        (re-search-forward
+         (rx "//" (group (* (any "/!")) (* " ")))
+         (line-end-position)
+         t nil))
+      (let ((offset (- (match-beginning 0) (line-beginning-position)))
+            (whitespaces (match-string 1)))
+        (funcall insert-line-break)
+        (delete-region (line-beginning-position) (point))
+        (insert (make-string offset ?\s) "//" whitespaces)))
 
-   ;; Line starts with /* or /**.
-   ((save-excursion
-      (beginning-of-line)
-      (looking-at (rx "/*" (group (? "*") (* " ")))))
-    (let ((whitespace-and-star-len (length (match-string 1))))
-      (if soft (insert-and-inherit ?\n) (newline 1))
-      (delete-region (line-beginning-position) (point))
-      (insert " *" (make-string whitespace-and-star-len ?\s))))
+     ;; Line starts with /* or /**.
+     ((save-excursion
+        (beginning-of-line)
+        (re-search-forward
+         (rx "/*" (group (? "*") (* " ")))
+         (line-end-position)
+         t nil))
+      (let ((offset (- (match-beginning 0) (line-beginning-position)))
+            (whitespace-and-star-len (length (match-string 1))))
+        (funcall insert-line-break)
+        (delete-region (line-beginning-position) (point))
+        (insert
+         (make-string offset ?\s)
+         " *"
+         (make-string whitespace-and-star-len ?\s))))
 
-   ;; Line starts with *.
-   ((save-excursion
-      (beginning-of-line)
-      (looking-at (rx (group (* " ") (any "*|") (* " ")))))
-    (let ((prefix (match-string 1)))
-      (if soft (insert-and-inherit ?\n) (newline 1))
-      (delete-region (line-beginning-position) (point))
-      (insert prefix)))
+     ;; Line starts with *.
+     ((save-excursion
+        (beginning-of-line)
+        (looking-at (rx (group (* " ") (any "*|") (* " ")))))
+      (let ((prefix (match-string 1)))
+        (funcall insert-line-break)
+        (delete-region (line-beginning-position) (point))
+        (insert prefix)))
 
-   ;; Line starts with whitespaces or no space.  This is basically the
-   ;; default case since (rx (* " ")) matches anything.
-   ((save-excursion
-      (beginning-of-line)
-      (looking-at (rx (* " "))))
-    (let ((whitespaces (match-string 0)))
-      (if soft (insert-and-inherit ?\n) (newline 1))
-      (delete-region (line-beginning-position) (point))
-      (insert whitespaces)))))
+     ;; Line starts with whitespaces or no space.  This is basically the
+     ;; default case since (rx (* " ")) matches anything.
+     ((save-excursion
+        (beginning-of-line)
+        (looking-at (rx (* " "))))
+      (let ((whitespaces (match-string 0)))
+        (funcall insert-line-break)
+        (delete-region (line-beginning-position) (point))
+        (insert whitespaces))))))
 
 ;;; Statement indent
 

@@ -1,6 +1,6 @@
 ;;; tramp-cmds.el --- Interactive commands for Tramp  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2007-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2025 Free Software Foundation, Inc.
 
 ;; Author: Michael Albinus <michael.albinus@gmx.de>
 ;; Keywords: comm, processes
@@ -39,6 +39,8 @@
 (defvar mm-7bit-chars)
 (defvar reporter-eval-buffer)
 (defvar reporter-prompt-for-summary-p)
+(defvar tramp-repository-branch)
+(defvar tramp-repository-version)
 
 ;;;###tramp-autoload
 (defun tramp-change-syntax (&optional syntax)
@@ -585,7 +587,7 @@ An alternative method could be chosen with `tramp-file-name-with-method'."
 	  (tramp-make-tramp-file-name
 	   (make-tramp-file-name
 	    :method tramp-file-name-with-method :localname localname)))
-	 ;; Remote file with multi-hop capable method..
+	 ;; Remote file with multi-hop capable method.
 	 ((tramp-multi-hop-p v)
 	  (tramp-make-tramp-file-name
 	   (make-tramp-file-name
@@ -609,7 +611,9 @@ If the buffer runs `dired', the buffer is reverted."
   (interactive)
   (cond
    ((buffer-file-name)
-    (find-alternate-file (tramp-file-name-with-sudo (buffer-file-name))))
+    (let ((pos (point)))
+      (find-alternate-file (tramp-file-name-with-sudo (buffer-file-name)))
+      (goto-char pos)))
    ((tramp-dired-buffer-p)
     (dired-unadvertise (expand-file-name default-directory))
     (setq default-directory (tramp-file-name-with-sudo default-directory)
@@ -630,7 +634,7 @@ If the buffer runs `dired', the buffer is reverted."
 ;;;###tramp-autoload
 (defun tramp-recompile-elpa-command-completion-p (_symbol _buffer)
   "A predicate for `tramp-recompile-elpa'.
-It is completed by \"M-x TAB\" only if package.el is loaded, and
+It is completed by `M-x TAB' only if package.el is loaded, and
 Tramp is an installed ELPA package."
   ;; We cannot apply `package-installed-p', this would also return the
   ;; builtin package.
@@ -644,7 +648,7 @@ This is needed if there are compatibility problems."
   ;; (declare (completion tramp-recompile-elpa-command-completion-p))
   (interactive)
   ;; We expect just one Tramp package is installed.
-  (when-let
+  (when-let*
       ((dir (tramp-compat-funcall
 	     'package-desc-dir
 	     (car (alist-get 'tramp (bound-and-true-p package-alist))))))
@@ -741,8 +745,8 @@ buffer in your bug report.
 
 (defun tramp-reporter-dump-variable (varsym mailbuf)
   "Pretty-print the value of the variable in symbol VARSYM."
-  (when-let ((reporter-eval-buffer reporter-eval-buffer)
-	     (val (buffer-local-value varsym reporter-eval-buffer)))
+  (when-let* ((reporter-eval-buffer reporter-eval-buffer)
+	      (val (buffer-local-value varsym reporter-eval-buffer)))
 
     (if (hash-table-p val)
 	;; Pretty print the cache.

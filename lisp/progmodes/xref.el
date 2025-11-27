@@ -1,6 +1,6 @@
 ;;; xref.el --- Cross-referencing commands              -*-lexical-binding:t-*-
 
-;; Copyright (C) 2014-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2014-2025 Free Software Foundation, Inc.
 ;; Version: 1.7.0
 ;; Package-Requires: ((emacs "26.1"))
 
@@ -487,7 +487,7 @@ Override existing value with NEW-VALUE if NEW-VALUE is set."
           (set-window-parameter w 'xref--history (xref--make-xref-history))))))
 
 (defun xref--get-history ()
-  "Return xref history using xref-history-storage."
+  "Return xref history using `xref-history-storage'."
   (funcall xref-history-storage))
 
 (defun xref--push-backward (m)
@@ -993,7 +993,6 @@ point."
     ;; suggested by Johan Claesson "to further reduce finger movement":
     (define-key map (kbd ".") #'xref-next-line)
     (define-key map (kbd ",") #'xref-prev-line)
-    (define-key map (kbd "g") #'xref-revert-buffer)
     (define-key map (kbd "M-,") #'xref-quit-and-pop-marker-stack)
     map))
 
@@ -1011,13 +1010,16 @@ point."
         #'xref--imenu-extract-index-name)
   (setq-local add-log-current-defun-function
               #'xref--add-log-current-defun)
+  (setq-local revert-buffer-function #'xref--revert-buffer)
   (setq-local outline-minor-mode-cycle t)
   (setq-local outline-minor-mode-use-buttons 'insert)
   (setq-local outline-search-function
               (lambda (&optional bound move backward looking-at)
                 (outline-search-text-property
                  'xref-group nil bound move backward looking-at)))
-  (setq-local outline-level (lambda () 1)))
+  (setq-local outline-level (lambda () 1))
+  (add-hook 'revert-buffer-restore-functions
+            #'xref-revert-buffer-restore-point nil t))
 
 (defvar xref--transient-buffer-mode-map
   (let ((map (make-sparse-keymap)))
@@ -1138,6 +1140,7 @@ XREF-ALIST is of the form ((GROUP . (XREF ...)) ...), where
 GROUP is a string for decoration purposes and XREF is an
 `xref-item' object."
   (require 'compile) ; For the compilation faces.
+  (setq xref-num-matches-found 0)
   (cl-loop for (group . xrefs) in xref-alist
            for max-line = (cl-loop for xref in xrefs
                                    maximize (xref-location-line
@@ -1157,6 +1160,7 @@ GROUP is a string for decoration purposes and XREF is an
            (xref--insert-propertized '(face xref-file-header xref-group t)
                                      group "\n")
            (dolist (xref xrefs)
+             (cl-incf xref-num-matches-found)
              (pcase-let (((cl-struct xref-item summary location) xref))
                (let* ((line (xref-location-line location))
                       (prefix
@@ -1246,7 +1250,6 @@ Return an alist of the form ((GROUP . (XREF ...)) ...)."
       (xref--ensure-default-directory dd (current-buffer))
       (xref--xref-buffer-mode)
       (xref--show-common-initialize xref-alist fetcher alist)
-      (setq xref-num-matches-found (length xrefs))
       (setq mode-line-process (list xref-mode-line-matches))
       (pop-to-buffer (current-buffer))
       (setq buf (current-buffer)))
@@ -1273,9 +1276,8 @@ Return an alist of the form ((GROUP . (XREF ...)) ...)."
           xref--original-window-intent (assoc-default 'display-action alist))
     (setq xref--fetcher fetcher)))
 
-(defun xref-revert-buffer ()
+(defun xref--revert-buffer (&rest _)    ; Ignore `revert-buffer' args.
   "Refresh the search results in the current buffer."
-  (interactive)
   (let ((inhibit-read-only t)
         (buffer-undo-list t))
     (save-excursion
@@ -1290,6 +1292,28 @@ Return an alist of the form ((GROUP . (XREF ...)) ...)."
           (propertize
            (error-message-string err)
            'face 'error)))))))
+
+;;; FIXME: Make this alias obsolete in future release.
+(defalias 'xref-revert-buffer #'revert-buffer)
+
+(defun xref-revert-buffer-restore-point ()
+  "Restore point on a previous item or group after reverting."
+  (let* ((item
+          (when (xref--item-at-point)
+            (buffer-substring-no-properties (pos-bol) (pos-eol))))
+         (group
+          (save-excursion
+            (when (or (get-text-property (point) 'xref-group)
+                      (and item (xref--search-property 'xref-group t)
+                           (get-text-property (point) 'xref-group)))
+              (buffer-substring-no-properties (pos-bol) (pos-eol))))))
+    (when (or item group)
+      (lambda ()
+        (goto-char (point-min))
+        (when (and group (search-forward (concat "\n" group "\n") nil t))
+          (goto-char (pos-bol 0)))
+        (when (and item (search-forward (concat "\n" item "\n") nil t))
+          (goto-char (pos-bol 0)))))))
 
 (defun xref--auto-jump-first (buf value)
   (when value
@@ -1492,31 +1516,40 @@ The meanings of both arguments are the same as documented in
                     xrefs
                   (setq xrefs 'called-already)))))))
   (let ((cb (current-buffer))
-        (pt (point)))
+        (pt (point))
+        (win (selected-window)))
     (prog1
         (funcall xref-show-xrefs-function fetcher
-                 `((window . ,(selected-window))
+                 `((window . ,win)
                    (display-action . ,display-action)
                    (auto-jump . ,xref-auto-jump-to-first-xref)))
-      (xref--push-markers cb pt))))
+      (xref--push-markers cb pt win))))
 
 (defun xref--show-defs (xrefs display-action)
   (let ((cb (current-buffer))
-        (pt (point)))
+        (pt (point))
+        (win (selected-window)))
     (prog1
         (funcall xref-show-definitions-function xrefs
-                 `((window . ,(selected-window))
+                 `((window . ,win)
                    (display-action . ,display-action)
                    (auto-jump . ,xref-auto-jump-to-first-definition)))
-      (xref--push-markers cb pt))))
+      (xref--push-markers cb pt win))))
 
-(defun xref--push-markers (buf pt)
+(defun xref--push-markers (buf pt win)
   (when (buffer-live-p buf)
-    (save-excursion
-      (with-no-warnings (set-buffer buf))
-      (goto-char pt)
-      (unless (region-active-p) (push-mark nil t))
-      (xref-push-marker-stack))))
+    ;; This was we support the `xref-history-storage' getter which
+    ;; depends on the selected window.  This is getting pretty complex,
+    ;; though. The alternative approach to try would be to push early
+    ;; but undo the stack insertion and mark-pushing in error handler.
+    (save-window-excursion
+      (when (window-live-p win)
+        (select-window win))
+      (save-excursion
+        (with-no-warnings (set-buffer buf))
+        (goto-char pt)
+        (unless (region-active-p) (push-mark nil t))
+        (xref-push-marker-stack)))))
 
 (defun xref--prompt-p (command)
   (or (eq xref-prompt-for-identifier t)
@@ -2117,7 +2150,7 @@ Such as the current syntax table and the applied syntax properties."
       ;; Using the temporary buffer is both a performance and a buffer
       ;; management optimization.
       (with-current-buffer tmp-buffer
-        ;; This let is fairly dangerouns, but improves performance
+        ;; This let is fairly dangerous, but improves performance
         ;; for large lists, see https://debbugs.gnu.org/53749#227
         (let ((inhibit-modification-hooks t))
         (erase-buffer)

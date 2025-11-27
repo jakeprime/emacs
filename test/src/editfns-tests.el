@@ -1,6 +1,6 @@
 ;;; editfns-tests.el --- tests for editfns.c  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2016-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2016-2025 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -503,6 +503,7 @@
             sanity-check-change-functions-errors)))
 
 (ert-deftest editfns-tests--before/after-change-functions ()
+  :expected-result :failed
   (with-temp-buffer
     (add-hook 'before-change-functions
               #'sanity-check-change-functions-before nil t)

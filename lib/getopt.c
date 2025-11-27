@@ -1,5 +1,5 @@
 /* Getopt for GNU.
-   Copyright (C) 1987-2024 Free Software Foundation, Inc.
+   Copyright (C) 1987-2025 Free Software Foundation, Inc.
    This file is part of the GNU C Library and is also part of gnulib.
    Patches to this file should be submitted to both projects.
 
@@ -723,7 +723,7 @@ _getopt_internal (int argc, char **argv, const char *optstring,
   return result;
 }
 
-/* glibc gets a LSB-compliant getopt and a POSIX-complaint __posix_getopt.
+/* glibc gets a LSB-compliant getopt and a POSIX-compliant __posix_getopt.
    Standalone applications just get a POSIX-compliant getopt.
    POSIX and LSB both require these functions to take 'char *const *argv'
    even though this is incorrect (because of the permutation).  */

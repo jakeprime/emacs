@@ -4,7 +4,7 @@ dnl	autoconf
 dnl in the directory containing this script.
 dnl If you changed any AC_DEFINES, also run autoheader.
 dnl
-dnl Copyright (C) 1994-1996, 1999-2024 Free Software Foundation, Inc.
+dnl Copyright (C) 1994-1996, 1999-2025 Free Software Foundation, Inc.
 dnl
 dnl  This file is part of GNU Emacs.
 dnl
@@ -23,7 +23,7 @@ dnl  along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 AC_PREREQ([2.65])
 dnl Note this is parsed by (at least) make-dist and lisp/cedet/ede/emacs.el.
-AC_INIT([GNU Emacs], [30.0.50], [bug-gnu-emacs@gnu.org], [],
+AC_INIT([GNU Emacs], [30.2], [bug-gnu-emacs@gnu.org], [],
   [https://www.gnu.org/software/emacs/])
 
 if test "$XCONFIGURE" = "android"; then
@@ -776,6 +776,17 @@ AS_IF([test "$with_android" = no || test -n "$XCONFIGURE"],[
     [android_enable_checking=yes
      export android_enable_checking])])
 
+AC_ARG_ENABLE([gc-mark-trace],
+ [AS_HELP_STRING([--disable-gc-mark-trace],
+                 [disable the mark trace buffer used for debugging the Emacs
+                 garbage collector])],
+ [ac_enable_gc_mark_trace="${enableval}"],
+ [ac_enable_gc_mark_trace=yes])
+if test "x$ac_enable_gc_mark_trace" = xyes ; then
+   AC_DEFINE([GC_REMEMBER_LAST_MARKED], [1],
+   [Define to 1 to enable GC mark trace buffer.])
+fi
+
 dnl The name of this option is unfortunate.  It predates, and has no
 dnl relation to, the "sampling-based elisp profiler" added in 24.3.
 dnl Actually, it stops it working.
@@ -878,6 +889,7 @@ AC_ARG_VAR([JAVAC], [Java compiler path.  Used for Android.])
 AC_ARG_VAR([JARSIGNER], [Java package signer path.  Used for Android.])
 AC_ARG_VAR([APKSIGNER], [Android package signer path.  Used for Android.])
 AC_ARG_VAR([SDK_BUILD_TOOLS], [Path to the Android SDK build tools.])
+AC_ARG_VAR([ZIP], [Path to the `zip' utility.])
 
 if test "$with_android" = "yes"; then
    AC_MSG_ERROR([Please specify the path to the Android.jar file, like so:
@@ -1025,7 +1037,7 @@ Please verify that the path to the SDK build tools you specified is correct])
   fi
 
   AC_PATH_PROGS([D8], [d8], [], "${SDK_BUILD_TOOLS}:$PATH")
-  if test "D8" = ""; then
+  if test "$D8" = ""; then
     AC_MSG_ERROR([The Android dexer was not found.
 Please verify that the path to the SDK build tools you specified is correct])
   fi
@@ -1223,8 +1235,13 @@ package will likely install on older systems but crash on startup.])
   ANDROID_SDK_8_OR_EARLIER=
   if test "$android_sdk" -le "8"; then
      ANDROID_SDK_8_OR_EARLIER=yes
+     AC_CHECK_PROGS([ZIP], [zip])
+     AS_IF([test -z "$ZIP"],
+       [AC_MSG_ERROR([The `zip' utility is required for generating \
+packages targeting Android 2.2.])])
   fi
   AC_SUBST([ANDROID_SDK_8_OR_EARLIER])
+  AC_SUBST([ZIP])
 
   # Save confdefs.h and config.log for now.
   mv -f confdefs.h _confdefs.h
@@ -1251,6 +1268,7 @@ package will likely install on older systems but crash on startup.])
   passthrough="$passthrough --with-pop=$with_pop"
   passthrough="$passthrough --with-harfbuzz=$with_harfbuzz"
   passthrough="$passthrough --with-threads=$with_threads"
+  passthrough="$passthrough --with-rsvg=$with_rsvg"
 
   # Now pass through some checking-related options.
   emacs_val="--enable-check-lisp-object-type=$enable_check_lisp_object_type"
@@ -1341,9 +1359,9 @@ if test "$ANDROID" = "yes"; then
     with_harfbuzz=no
     with_native_compilation=no
     with_threads=no
+    with_rsvg=no
   fi
 
-  with_rsvg=no
   with_libsystemd=no
   with_cairo=no
   with_xft=no
@@ -3126,7 +3144,7 @@ if test "${HAVE_W32}" = "yes"; then
       NATIVE_IMAGE_API="yes (w32)"
       W32_OBJ="$W32_OBJ w32image.o"
     fi
-    W32_LIBS="$W32_LIBS -lwinmm -lusp10 -lgdi32 -lcomdlg32"
+    W32_LIBS="$W32_LIBS -lwinmm -lgdi32 -lcomdlg32"
     W32_LIBS="$W32_LIBS -lmpr -lwinspool -lole32 -lcomctl32"
     W32_RES_LINK="\$(EMACSRES)"
     CLIENTRES="emacsclient.res"
@@ -3559,10 +3577,13 @@ fi
 HAVE_RSVG=no
 if test "${HAVE_X11}" = "yes" || test "${HAVE_NS}" = "yes" \
    || test "${opsys}" = "mingw32" || test "${HAVE_BE_APP}" = "yes" \
-   || test "${window_system}" = "pgtk"; then
+   || test "${window_system}" = "pgtk" \
+   || test "${REALLY_ANDROID}" = "yes"; then
   if test "${with_rsvg}" != "no"; then
     RSVG_REQUIRED=2.14.0
-    RSVG_MODULE="librsvg-2.0 >= $RSVG_REQUIRED"
+    AS_IF([test "${REALLY_ANDROID}" = "yes"],
+      [RSVG_MODULE="librsvg"],
+      [RSVG_MODULE="librsvg-2.0 >= $RSVG_REQUIRED"])
 
     EMACS_CHECK_MODULES([RSVG], [$RSVG_MODULE])
     AC_SUBST([RSVG_CFLAGS])
@@ -4119,26 +4140,28 @@ case $with_file_notification,$NOTIFY_OBJ in
     fi ;;
 esac
 
-dnl kqueue is available on BSD-like systems.
-case $with_file_notification,$NOTIFY_OBJ in
-  kqueue,* | yes,)
-    EMACS_CHECK_MODULES([KQUEUE], [libkqueue])
-    if test "$HAVE_KQUEUE" = "yes"; then
-       AC_DEFINE([HAVE_KQUEUE], [1], [Define to 1 to use kqueue.])
-       CPPFLAGS="$CPPFLAGS -I/usr/include/kqueue"
-       NOTIFY_CFLAGS=$KQUEUE_CFLAGS
-       NOTIFY_LIBS=$KQUEUE_LIBS
-       NOTIFY_OBJ=kqueue.o
-       NOTIFY_SUMMARY="yes -lkqueue"
-    else
-       AC_SEARCH_LIBS([kqueue], [])
-       if test "$ac_cv_search_kqueue" != no; then
-	 AC_DEFINE([HAVE_KQUEUE], [1], [Define to 1 to use kqueue.])
-	 NOTIFY_OBJ=kqueue.o
-	 NOTIFY_SUMMARY="yes (kqueue)"
-       fi
-    fi ;;
-esac
+AS_IF([test "$opsys" != "haiku"], [
+ dnl kqueue is available on BSD-like systems and Haiku, but Haiku's
+ dnl implementation cannot monitor filesystem activity.
+ case $with_file_notification,$NOTIFY_OBJ in
+   kqueue,* | yes,)
+     EMACS_CHECK_MODULES([KQUEUE], [libkqueue])
+     if test "$HAVE_KQUEUE" = "yes"; then
+	AC_DEFINE([HAVE_KQUEUE], [1], [Define to 1 to use kqueue.])
+	CPPFLAGS="$CPPFLAGS -I/usr/include/kqueue"
+	NOTIFY_CFLAGS=$KQUEUE_CFLAGS
+	NOTIFY_LIBS=$KQUEUE_LIBS
+	NOTIFY_OBJ=kqueue.o
+	NOTIFY_SUMMARY="yes -lkqueue"
+     else
+	AC_SEARCH_LIBS([kqueue], [])
+	if test "$ac_cv_search_kqueue" != no; then
+	  AC_DEFINE([HAVE_KQUEUE], [1], [Define to 1 to use kqueue.])
+	  NOTIFY_OBJ=kqueue.o
+	  NOTIFY_SUMMARY="yes (kqueue)"
+	fi
+     fi ;;
+ esac])
 
 dnl g_file_monitor exists since glib 2.18.  G_FILE_MONITOR_EVENT_MOVED
 dnl has been added in glib 2.24.  It has been tested under
@@ -4438,10 +4461,11 @@ XWIDGETS_OBJ=
 if test "$with_xwidgets" != "no"; then
   if test "$USE_GTK_TOOLKIT" = "GTK3" && test "$window_system" != "none"; then
     WEBKIT_REQUIRED=2.12
-    WEBKIT_MODULES="webkit2gtk-4.1 >= $WEBKIT_REQUIRED"
+    WEBKIT_BROKEN=2.41.92
+    WEBKIT_MODULES="webkit2gtk-4.1 >= $WEBKIT_REQUIRED webkit2gtk-4.1 < $WEBKIT_BROKEN"
     EMACS_CHECK_MODULES([WEBKIT], [$WEBKIT_MODULES])
     if test "$HAVE_WEBKIT" = "no"; then
-      WEBKIT_MODULES="webkit2gtk-4.0 >= $WEBKIT_REQUIRED"
+      WEBKIT_MODULES="webkit2gtk-4.0 >= $WEBKIT_REQUIRED webkit2gtk-4.0 < $WEBKIT_BROKEN"
       EMACS_CHECK_MODULES([WEBKIT], [$WEBKIT_MODULES])
     fi
     HAVE_XWIDGETS=$HAVE_WEBKIT
@@ -7112,7 +7136,7 @@ fi
 
 version=$PACKAGE_VERSION
 
-copyright="Copyright (C) 2024 Free Software Foundation, Inc."
+copyright="Copyright (C) 2025 Free Software Foundation, Inc."
 AC_DEFINE_UNQUOTED([COPYRIGHT], ["$copyright"],
   [Short copyright string for this version of Emacs.])
 AC_SUBST([copyright])
@@ -7590,8 +7614,7 @@ send your change to bug-gnu-emacs@gnu.org])])])
 
 AH_TOP([/* GNU Emacs site configuration template file.
 
-Copyright (C) 1988, 1993-1994, 1999-2002, 2004-2021
-  Free Software Foundation, Inc.
+Copyright (C) 1988-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 

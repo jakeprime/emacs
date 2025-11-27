@@ -1,6 +1,6 @@
 ;;; esh-util.el --- general utilities  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2025 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 
@@ -256,7 +256,7 @@ specifying a region in the current buffer, or (:file . FILENAME)
 to temporarily insert the contents of FILENAME.
 
 Before executing BODY, narrow the buffer to the text for COMMAND
-and and set point to the beginning of the narrowed region.
+and set point to the beginning of the narrowed region.
 
 The value returned is the last form in BODY."
   (declare (indent 1))
@@ -288,7 +288,7 @@ The value returned is the last form in BODY."
 (defun eshell-find-delimiter
   (open close &optional bound reverse-p backslash-p)
   "From point, find the CLOSE delimiter corresponding to OPEN.
-The matching is bounded by BOUND. If REVERSE-P is non-nil,
+The matching is bounded by BOUND.  If REVERSE-P is non-nil,
 process the region backwards.
 
 If BACKSLASH-P is non-nil, or OPEN and CLOSE are different
@@ -337,7 +337,7 @@ doubling it up."
 
 (defun eshell-convertible-to-number-p (string)
   "Return non-nil if STRING can be converted to a number.
-If `eshell-convert-numeric-aguments', always return nil."
+If `eshell-convert-numeric-arguments', always return nil."
   (and eshell-convert-numeric-arguments
        (string-match
         (concat "\\`\\s-*" eshell-number-regexp "\\s-*\\'")
@@ -346,7 +346,7 @@ If `eshell-convert-numeric-aguments', always return nil."
 (defun eshell-convert-to-number (string)
   "Try to convert STRING to a number.
 If STRING doesn't look like a number (or
-`eshell-convert-numeric-aguments' is nil), just return STRING
+`eshell-convert-numeric-arguments' is nil), just return STRING
 unchanged."
   (if (eshell-convertible-to-number-p string)
       (string-to-number string)
@@ -361,7 +361,7 @@ trailing newlines removed.  Otherwise, this behaves as follows:
 
 * Split multiline strings by line.
 
-* If `eshell-convert-numeric-aguments' is non-nil and every line
+* If `eshell-convert-numeric-arguments' is non-nil and every line
   of output looks like a number, convert them to numbers."
   (cond
    ((not (stringp string))
@@ -417,7 +417,8 @@ as the $PATH was actually specified."
                                       (butlast (exec-path))))))
       (when (and (not literal-p)
                  (not remote)
-                 (eshell-under-windows-p))
+                 (eshell-under-windows-p)
+                 (not (member "." path)))
         (push "." path))
       (if (and remote (not literal-p))
           (mapcar (lambda (x) (concat remote x)) path)

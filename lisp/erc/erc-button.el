@@ -1,6 +1,6 @@
 ;;; erc-button.el --- A way of buttonizing certain things in ERC buffers  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1996-2004, 2006-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2004, 2006-2025 Free Software Foundation, Inc.
 
 ;; Author: Mario Lang <mlang@delysid.org>
 ;; Maintainer: Amin Bandali <bandali@gnu.org>, F. Jason Park <jp@neverwas.me>
@@ -815,7 +815,7 @@ and `apropos' for other symbols."
 
 (defun erc-button--display-error-with-buttons
     (from to fun nick-p &optional data regexp)
-  "Replace command in region with keys and return new bounds"
+  "Replace command in region with keys and return new bounds."
   (let* ((o (buffer-substring from to))
          (s (substitute-command-keys o))
          (erc-button-face (and (equal o s) erc-button-face)))

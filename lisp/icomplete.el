@@ -1,6 +1,6 @@
 ;;; icomplete.el --- minibuffer completion incremental feedback -*- lexical-binding: t -*-
 
-;; Copyright (C) 1992-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1992-2025 Free Software Foundation, Inc.
 
 ;; Author: Ken Manheimer <ken dot manheimer at gmail...>
 ;; Created: Mar 1993 Ken Manheimer, klm@nist.gov - first release to usenet
@@ -139,9 +139,17 @@ See `icomplete-delay-completions-threshold'."
   :type 'integer)
 
 (defcustom icomplete-in-buffer nil
-  "If non-nil, also use Icomplete when completing in non-mini buffers.
+  "If non-nil, use Icomplete when completing in buffers other than minibuffer.
 This affects commands like `completion-in-region', but not commands
-that use their own completions setup."
+that use their own completions setup.
+
+If you would prefer to see only Icomplete's in-buffer display, but do
+not want the \"*Completions*\" buffer to pop up in those cases, add
+this advice to your init file:
+
+  (advice-add \\='completion-at-point
+              :after #\\='minibuffer-hide-completions)
+"
   :type 'boolean)
 
 (defcustom icomplete-minibuffer-setup-hook nil
@@ -1057,7 +1065,8 @@ matches exist."
                   (setq determ (concat open-bracket "" close-bracket)))
                 (while (and comps (not limit))
                   (setq comp
-                        (if prefix-len (substring (car comps) prefix-len) (car comps))
+                        (let ((cur (completion-lazy-hilit (car comps))))
+                          (if prefix-len (substring cur prefix-len) cur))
                         comps (cdr comps))
                   (setq prospects-len
                         (+ (string-width comp)
@@ -1066,8 +1075,7 @@ matches exist."
                   (if (< prospects-len prospects-max)
                       (push comp prospects)
                     (setq limit t)))
-                (setq prospects
-                      (nreverse (mapcar #'completion-lazy-hilit prospects)))
+                (setq prospects (nreverse prospects))
                 ;; Decorate first of the prospects.
                 (when prospects
                   (let ((first (copy-sequence (pop prospects))))

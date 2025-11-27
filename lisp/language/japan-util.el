@@ -1,6 +1,6 @@
 ;;; japan-util.el --- utilities for Japanese  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2001-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2001-2025 Free Software Foundation, Inc.
 ;; Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
 ;;   2005, 2006, 2007, 2008, 2009, 2010, 2011
 ;;   National Institute of Advanced Industrial Science and Technology (AIST)
@@ -317,7 +317,8 @@ Optional argument KATAKANA-ONLY non-nil means to convert only KATAKANA char."
 ;;;###autoload
 (defun read-hiragana-string (prompt &optional initial-input)
   "Read a Hiragana string from the minibuffer, prompting with string PROMPT.
-If non-nil, second arg INITIAL-INPUT is a string to insert before reading."
+If non-nil, second arg INITIAL-INPUT is a string to insert before reading.
+Return the string read from the minibuffer."
   (read-multilingual-string prompt initial-input "japanese-hiragana"))
 
 ;;

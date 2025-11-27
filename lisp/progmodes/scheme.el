@@ -1,6 +1,6 @@
 ;;; scheme.el --- Scheme (and DSSSL) editing mode    -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1986-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1986-2025 Free Software Foundation, Inc.
 
 ;; Author: Bill Rozas <jinx@martigny.ai.mit.edu>
 ;; Adapted-by: Dave Love <d.love@dl.ac.uk>
@@ -545,7 +545,7 @@ that variable's value is a string."
      '("(\\(element\\)\\>[ \t]*(\\(\\S)+\\))"
        (1 font-lock-keyword-face)
        (2 font-lock-type-face))
-     '("\\<\\sw+:\\>" . font-lock-constant-face) ; trailing `:' c.f. scheme
+     '("\\<\\sw+:\\>" . font-lock-constant-face) ; trailing `:' cf. scheme
      ;; SGML markup (from sgml-mode) :
      '("<\\([!?][-a-z0-9]+\\)" 1 font-lock-keyword-face)
      '("<\\(/?[-a-z0-9]+\\)" 1 font-lock-function-name-face)))

@@ -1,5 +1,5 @@
 /* Markers: examining, setting and deleting.
-   Copyright (C) 1985, 1997-1998, 2001-2024 Free Software Foundation,
+   Copyright (C) 1985, 1997-1998, 2001-2025 Free Software Foundation,
    Inc.
 
 This file is part of GNU Emacs.
@@ -358,11 +358,11 @@ buf_bytepos_to_charpos (struct buffer *b, ptrdiff_t bytepos)
     {
       CONSIDER (tail->bytepos, tail->charpos);
 
-      /* If we are down to a range of 50 chars,
+      /* If we are down to a range of DISTANCE bytes,
 	 don't bother checking any other markers;
 	 scan the intervening chars directly now.  */
-      if (best_above - bytepos < distance
-          || bytepos - best_below < distance)
+      if (best_above_byte - bytepos < distance
+          || bytepos - best_below_byte < distance)
 	break;
       else
         distance += BYTECHAR_DISTANCE_INCREMENT;

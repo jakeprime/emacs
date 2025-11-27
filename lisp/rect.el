@@ -1,6 +1,6 @@
 ;;; rect.el --- rectangle functions for GNU Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985, 1999-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 1999-2025 Free Software Foundation, Inc.
 
 ;; Maintainer: Didier Verna <didier@didierverna.net>
 ;; Keywords: internal
@@ -766,7 +766,7 @@ Ignores `line-move-visual'."
    ((not rectangle-mark-mode)
     (funcall orig))
    (t
-    (apply #'min (mapcar #'car (region-bounds))))))
+    (apply #'min (mapcar #'car (let (rectangle-mark-mode) (region-bounds)))))))
 
 (defun rectangle--region-end (orig)
   "Like `region-end' but supports rectangular regions."
@@ -774,7 +774,7 @@ Ignores `line-move-visual'."
    ((not rectangle-mark-mode)
     (funcall orig))
    (t
-    (apply #'max (mapcar #'cdr (region-bounds))))))
+    (apply #'max (mapcar #'cdr (let (rectangle-mark-mode) (region-bounds)))))))
 
 (defun rectangle--extract-region (orig &optional delete)
   (cond

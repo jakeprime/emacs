@@ -1,6 +1,6 @@
 ;;; elixir-ts-mode.el --- Major mode for Elixir with tree-sitter support -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2022-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2022-2025 Free Software Foundation, Inc.
 
 ;; Author: Wilhelm H Kirschbaum <wkirschbaum@gmail.com>
 ;; Created: November 2022
@@ -402,11 +402,9 @@
              (binary_operator
               left: (call target: (identifier) @font-lock-function-name-face))))))
 
-   ;; A function definition like "def _foo" is valid, but we should
-   ;; not apply the comment-face unless its a non-function identifier, so
-   ;; the comment matches has to be after the function matches.
    :language 'elixir
    :feature 'elixir-comment
+   :override t
    '((comment) @font-lock-comment-face
      ((identifier) @font-lock-comment-face
       (:match "^_[a-z]\\|^_$" @font-lock-comment-face)))
@@ -490,7 +488,8 @@
 
    :language 'elixir
    :feature 'elixir-data-type
-   '([(atom) (alias)] @font-lock-type-face
+   '((alias) @font-lock-type-face
+     (atom) @elixir-ts-atom
      (keywords (pair key: (keyword) @elixir-ts-keyword-key))
      [(keyword) (quoted_keyword)] @elixir-ts-atom
      [(boolean) (nil)] @elixir-ts-atom
@@ -555,6 +554,10 @@
      (unary_operator operand: (identifier) @font-lock-variable-use-face)
      (interpolation (identifier) @font-lock-variable-use-face)
      (do_block (identifier) @font-lock-variable-use-face)
+     (rescue_block (identifier) @font-lock-variable-use-face)
+     (catch_block (identifier) @font-lock-variable-use-face)
+     (else_block (identifier) @font-lock-variable-use-face)
+     (after_block (identifier) @font-lock-variable-use-face)
      (access_call target: (identifier) @font-lock-variable-use-face)
      (access_call "[" key: (identifier) @font-lock-variable-use-face "]"))
 
@@ -572,7 +575,9 @@
     (treesit-range-rules
      :embed 'heex
      :host 'elixir
-     '((sigil (sigil_name) @name (:match "^[HF]$" @name) (quoted_content) @heex)))))
+     '((sigil (sigil_name) @_name
+              (:match "^[HF]$" @_name)
+              (quoted_content) @heex)))))
 
 (defvar heex-ts--sexp-regexp)
 (defvar heex-ts--indent-rules)
@@ -699,7 +704,8 @@ Return nil if NODE is not a defun node or doesn't have a name."
       (require 'heex-ts-mode)
       (treesit-parser-create 'heex))
 
-    (treesit-parser-create 'elixir)
+    (setq-local treesit-primary-parser
+                (treesit-parser-create 'elixir))
 
     (setq-local treesit-language-at-point-function
                 'elixir-ts--treesit-language-at-point)
@@ -730,9 +736,6 @@ Return nil if NODE is not a defun node or doesn't have a name."
     ;; Embedded Heex.
     (when (treesit-ready-p 'heex)
       (setq-local treesit-range-settings elixir-ts--treesit-range-rules)
-
-      (setq-local treesit-simple-indent-rules
-                  (append treesit-simple-indent-rules heex-ts--indent-rules))
 
       (setq-local treesit-font-lock-settings
                   (append treesit-font-lock-settings

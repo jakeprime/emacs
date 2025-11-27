@@ -1,6 +1,6 @@
 ;;; ert.el --- Emacs Lisp Regression Testing  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2007-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2025 Free Software Foundation, Inc.
 
 ;; Author: Christian Ohler <ohler@gnu.org>
 ;; Keywords: lisp, tools
@@ -422,16 +422,23 @@ and aborts the current test as failed if it doesn't."
 (cl-defmacro should-error (form &rest keys &key type exclude-subtypes)
   "Evaluate FORM and check that it signals an error.
 
-The error signaled needs to match TYPE.  TYPE should be a list
-of condition names.  (It can also be a non-nil symbol, which is
-equivalent to a singleton list containing that symbol.)  If
-EXCLUDE-SUBTYPES is nil, the error matches TYPE if one of its
-condition names is an element of TYPE.  If EXCLUDE-SUBTYPES is
-non-nil, the error matches TYPE if it is an element of TYPE.
+If no error was signaled, abort the test as failed and
+return (ERROR-SYMBOL . DATA) from the error.
 
-If the error matches, returns (ERROR-SYMBOL . DATA) from the
-error.  If not, or if no error was signaled, abort the test as
-failed."
+You can also match specific errors using the KEYWORD-ARGS arguments,
+which is specified as keyword/argument pairs.  The following arguments
+are defined:
+
+:type TYPE -- If TYPE is non-nil, the error signaled needs to match
+TYPE.  TYPE should be a list of condition names.  It can also be a
+symbol, which is equivalent to a one-element list containing that
+symbol.
+
+:exclude-subtypes EXCLUDED -- If EXCLUDED is non-nil, the error matches
+TYPE only if it is an element of TYPE.  If nil (the default), the error
+matches TYPE if one of its condition names is an element of TYPE.
+
+\(fn FORM &rest KEYWORD-ARGS)"
   (declare (debug t))
   (unless type (setq type ''error))
   (ert--expand-should
@@ -932,14 +939,14 @@ of tests, or t, which refers to all tests named by symbols in `obarray'.
 Valid SELECTORs:
 
 nil  -- Selects the empty set.
-t    -- Selects UNIVERSE.
+t    -- Selects all of UNIVERSE.  If UNIVERSE is t, selects all tests.
 :new -- Selects all tests that have not been run yet.
 :failed, :passed       -- Select tests according to their most recent result.
 :expected, :unexpected -- Select tests according to their most recent result.
 a string -- A regular expression selecting all tests with matching names.
-a test   -- (i.e., an object of the ert-test data-type) Selects that test.
-a symbol -- Selects the test that the symbol names, signals an
-    `ert-test-unbound' error if none.
+a test   -- (i.e., an object of the `ert-test' data-type) Selects that test.
+a symbol -- Selects the test named by the symbol, signals an
+    `ert-test-unbound' error if no such test.
 \(member TESTS...) -- Selects the elements of TESTS, a list of tests
     or symbols naming tests.
 \(eql TEST) -- Selects TEST, a test or a symbol naming a test.
@@ -1317,13 +1324,12 @@ empty string."
   "Pretty-print OBJECT, indenting it to the current column of point.
 Ensures a final newline is inserted."
   (let ((begin (point))
+        (cols (current-column))
         (pp-escape-newlines t)
         (print-escape-control-characters t))
     (pp object (current-buffer))
     (unless (bolp) (insert "\n"))
-    (save-excursion
-      (goto-char begin)
-      (indent-sexp))))
+    (indent-rigidly begin (point) cols)))
 
 (defun ert--insert-infos (result)
   "Insert `ert-info' infos from RESULT into current buffer.
@@ -1375,10 +1381,10 @@ RESULT must be an `ert-test-result-with-condition'."
 (defun ert-run-tests-batch (&optional selector)
   "Run the tests specified by SELECTOR, printing results to the terminal.
 
-SELECTOR works as described in `ert-select-tests', except if
-SELECTOR is nil, in which case all tests rather than none will be
-run; this makes the command line \"emacs -batch -l my-tests.el -f
-ert-run-tests-batch-and-exit\" useful.
+SELECTOR selects which tests to run as described in `ert-select-tests' when
+called with its second argument t, except if SELECTOR is nil, in which case
+all tests rather than none will be run; this makes the command line
+ \"emacs -batch -l my-tests.el -f ert-run-tests-batch-and-exit\" useful.
 
 Returns the stats object."
   (unless selector (setq selector 't))
@@ -2240,7 +2246,9 @@ STATS is the stats object; LISTENER is the results listener."
 (defun ert-run-tests-interactively (selector)
   "Run the tests specified by SELECTOR and display the results in a buffer.
 
-SELECTOR works as described in `ert-select-tests'."
+SELECTOR selects which tests to run as described in `ert-select-tests'
+when called with its second argument t.  Interactively, prompt for
+SELECTOR; the default t means run all the defined tests."
   (interactive
    (list (let ((default (if ert--selector-history
                             ;; Can't use `first' here as this form is

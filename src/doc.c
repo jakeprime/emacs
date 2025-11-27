@@ -1,6 +1,6 @@
 /* Record indices of function doc strings stored in a file. -*- coding: utf-8 -*-
 
-Copyright (C) 1985-1986, 1993-1995, 1997-2024 Free Software Foundation,
+Copyright (C) 1985-1986, 1993-1995, 1997-2025 Free Software Foundation,
 Inc.
 
 This file is part of GNU Emacs.
@@ -392,7 +392,7 @@ DEFUN ("internal-subr-documentation", Fsubr_documentation, Ssubr_documentation, 
   (Lisp_Object function)
 {
 #ifdef HAVE_NATIVE_COMP
-  if (!NILP (Fsubr_native_elisp_p (function)))
+  if (!NILP (Fnative_comp_function_p (function)))
     return native_function_doc (function);
   else
 #endif
@@ -669,7 +669,7 @@ If the variable `text-quoting-style' is `grave', `straight' or
 `curve', just return that value.  If it is nil (the default), return
 `grave' if curved quotes cannot be displayed (for instance, on a
 terminal with no support for these characters), otherwise return
-`quote'.  Any other value is treated as `grave'.
+`curve'.  Any other value is treated as `curve'.
 
 Note that in contrast to the variable `text-quoting-style', this
 function will never return nil.  */)

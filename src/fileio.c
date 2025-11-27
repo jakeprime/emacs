@@ -1,6 +1,6 @@
 /* File IO for GNU Emacs.
 
-Copyright (C) 1985-1988, 1993-2024 Free Software Foundation, Inc.
+Copyright (C) 1985-1988, 1993-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -847,6 +847,10 @@ Each element in COMPONENTS must be a string or nil.
 DIRECTORY or the non-final elements in COMPONENTS may or may not end
 with a slash -- if they don't end with a slash, a slash will be
 inserted before concatenating.
+In most cases, one or more calls to `expand-file-name' are better
+suited for the job than this function.  Use this function only if
+some of the special expansions done by `expand-file-name' get in
+the way of what your program needs to do.
 usage: (file-name-concat DIRECTORY &rest COMPONENTS)  */)
   (ptrdiff_t nargs, Lisp_Object *args)
 {
@@ -2050,7 +2054,9 @@ the value of this function.
 
 If `/~' appears, all of FILENAME through that `/' is discarded.
 If `//' appears, everything up to and including the first of
-those `/' is discarded.  */)
+those `/' is discarded.  More generally, if a variable substitution
+produces an absolute file name, everything before that file name
+is discarded.  */)
   (Lisp_Object filename)
 {
   char *nm, *p, *x, *endp;
@@ -3787,8 +3793,9 @@ DEFUN ("unix-sync", Funix_sync, Sunix_sync, 0, 0, "",
 
 DEFUN ("file-newer-than-file-p", Ffile_newer_than_file_p, Sfile_newer_than_file_p, 2, 2, 0,
        doc: /* Return t if file FILE1 is newer than file FILE2.
-If FILE1 does not exist, the answer is nil;
-otherwise, if FILE2 does not exist, the answer is t.  */)
+If FILE1 does not exist, the return value is nil;
+if FILE2 does not exist, the return value is t.
+For existing files, this compares their last-modified times.  */)
   (Lisp_Object file1, Lisp_Object file2)
 {
   struct stat st1, st2;
@@ -4188,7 +4195,7 @@ by calling `format-decode', which see.  */)
      named pipes, and it's probably just not worth it.  So we should
      at least signal an error.  */
 
-  if (!S_ISREG (st.st_mode))
+  if (!(S_ISREG (st.st_mode) || S_ISDIR (st.st_mode)))
     {
       regular = false;
 
@@ -6531,7 +6538,18 @@ If the underlying system call fails, value is nil.  */)
   || defined STAT_STATFS4 || defined STAT_STATVFS		\
   || defined STAT_STATVFS64
   struct fs_usage u;
-  if (get_fs_usage (SSDATA (ENCODE_FILE (filename)), NULL, &u) != 0)
+  const char *name;
+
+  name = SSDATA (ENCODE_FILE (filename));
+
+#if defined HAVE_ANDROID && !defined ANDROID_STUBIFY
+  /* With special directories, this information is unavailable.  */
+  if (android_is_special_directory (name, "/assets")
+      || android_is_special_directory (name, "/content"))
+    return Qnil;
+#endif /* defined HAVE_ANDROID && !defined ANDROID_STUBIFY */
+
+  if (get_fs_usage (name, NULL, &u) != 0)
     return errno == ENOSYS ? Qnil : file_attribute_errno (filename, errno);
   return list3 (blocks_to_bytes (u.fsu_blocksize, u.fsu_blocks, false),
 		blocks_to_bytes (u.fsu_blocksize, u.fsu_bfree, false),

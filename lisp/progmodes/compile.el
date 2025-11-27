@@ -1,6 +1,6 @@
 ;;; compile.el --- run compiler as inferior of Emacs, parse error messages  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985-1987, 1993-1999, 2001-2024 Free Software
+;; Copyright (C) 1985-1987, 1993-1999, 2001-2025 Free Software
 ;; Foundation, Inc.
 
 ;; Authors: Roland McGrath <roland@gnu.org>,
@@ -61,12 +61,28 @@ If nil, use Emacs default."
 
 (defcustom compilation-transform-file-match-alist
   '(("/bin/[a-z]*sh\\'" nil))
-  "Alist of regexp/replacements to alter file names in compilation errors.
-If the replacement is nil, the file will not be considered an
-error after all.  If not nil, it should be a regexp replacement
-string."
-  :type '(repeat (list regexp (choice (const :tag "No replacement" nil)
-                                      string)))
+  "Alist of regexp/replacements to alter file names in compiler messages.
+If the replacement is nil, the matching message will not be considered
+an error or warning.  If not nil, it should be a replacement string
+for the matched regexp.
+
+If a non-nil replacement is specified, the value of the matched file name
+used to locate the warning or error is modified using the replacement, but
+the compilation buffer still displays the original value.
+
+For example, to prepend a subdirectory \"bar/\" to all file names in
+compiler messages, add an entry matching \"\\\\=`\" and a replacement
+string of \"bar/\", i.e.:
+
+    (\"\\\\=`\" \"bar/\")
+
+Similarly, to remove a prefix \"bar/\", use:
+
+    (\"\\\\=`bar/\" \"\")"
+  :type '(repeat (list (regexp :tag "Filename that matches")
+                       (radio :tag "Action"
+                              (const :tag "Do not consider as error" nil)
+                              (string :tag "Replace matched filename with"))))
   :version "27.1")
 
 (defvar compilation-filter-hook nil
@@ -95,8 +111,8 @@ like.
 For instance, to hide the verbose output from recursive
 makefiles, you can say something like:
 
-  (setq compilation-hidden-output
-        \\='(\"^make[^\n]+\n\"))"
+  (setopt compilation-hidden-output
+          \\='(\"^make[^\\n]+\\n\"))"
   :type '(choice regexp
                  (repeat regexp))
   :version "29.1")
@@ -194,6 +210,11 @@ and a string describing how the process finished.")
 
 (defvar compilation-error-regexp-alist-alist
  (eval-when-compile
+   ;; The order of this list is the default order of items in
+   ;; `compilation-error-regexp-alist' which is also the matching order,
+   ;; so don't add things in alphabetic order just out of habit.
+   ;; FIXME: We should sort it by frequency (less often used ones in the back),
+   ;; but individual patterns also have their own partial order.
   `((absoft
      "^\\(?:[Ee]rror on \\|[Ww]arning on\\( \\)\\)?[Ll]ine[ \t]+\\([0-9]+\\)[ \t]+\
 of[ \t]+\"?\\([a-zA-Z]?:?[^\":\n]+\\)\"?:" 3 2 nil (1))
@@ -223,13 +244,6 @@ of[ \t]+\"?\\([a-zA-Z]?:?[^\":\n]+\\)\"?:" 3 2 nil (1))
      "^[ \t]*File \\(\"?\\)\\([^,\" \n\t<>]+\\)\\1, lines? \\([0-9]+\\)-?\\([0-9]+\\)?\\(?:$\\|,\
 \\(?: characters? \\([0-9]+\\)-?\\([0-9]+\\)?:\\)?\\([ \n]Warning\\(?: [0-9]+\\)?:\\)?\\)"
      2 (3 . 4) (5 . 6) (7))
-
-    (cargo
-     "\\(?:\\(?4:error\\)\\|\\(?5:warning\\)\\):[^\0]+?--> \\(?1:[^:]+\\):\\(?2:[[:digit:]]+\\):\\(?3:[[:digit:]]+\\)"
-     1 2 3 (5)
-     nil
-     (5 compilation-warning-face)
-     (4 compilation-error-face))
 
     (cmake
      "^CMake \\(?:Error\\|\\(Warning\\)\\) at \\(.*\\):\\([1-9][0-9]*\\) ([^)]+):$"
@@ -265,10 +279,28 @@ of[ \t]+\"?\\([a-zA-Z]?:?[^\":\n]+\\)\"?:" 3 2 nil (1))
      "\\(^Warning .*\\)? line[ \n]\\([0-9]+\\)[ \n]\\(?:col \\([0-9]+\\)[ \n]\\)?file \\([^ :;\n]+\\)"
      4 2 3 (1))
 
-    ;; Gradle with kotlin-gradle-plugin (see
-    ;; GradleStyleMessagerRenderer.kt in kotlin sources, see
-    ;; https://youtrack.jetbrains.com/issue/KT-34683).
+    ;; Introduced in Kotlin 1.8 and current as of Kotlin 2.0.
+    ;; Emitted by `GradleStyleMessagerRenderer' in Kotlin sources.
     (gradle-kotlin
+     ,(rx bol
+          (| (group "w")                ; 1: warning
+             (group (in "iv"))          ; 2: info
+             "e")                       ; error
+          ": "
+          "file://"
+          (group                        ; 3: file
+           (? (in "A-Za-z") ":")
+           (+ (not (in "\n:"))))
+          ":"
+          (group (+ digit))             ; 4: line
+          ":"
+          (group (+ digit))             ; 5: column
+          " ")
+     3 4 5 (1 . 2))
+
+    ;; Obsoleted in Kotlin 1.8 Beta, released on Nov 15, 2022.
+    ;; See commit `93a0cdbf973' in Kotlin Git repository.
+    (gradle-kotlin-legacy
      ,(rx bol
           (| (group "w")                ; 1: warning
              (group (in "iv"))          ; 2: info
@@ -773,10 +805,10 @@ Alternatively, FACE can evaluate to a property list of the
 form (face FACE PROP1 VAL1 PROP2 VAL2 ...), in which case all the
 listed text properties PROP# are given values VAL# as well.
 
-After identifying errors and warnings determined by this
+After identifying compilation errors and warnings determined by this
 variable, the `compilation-transform-file-match-alist' variable
 is then consulted.  It allows further transformations of the
-matched file names, and weeding out false positives."
+matched file names, and ignoring false positives."
   :type '(repeat (choice (symbol :tag "Predefined symbol")
 			 (sexp :tag "Error specification")))
   :link `(file-link :tag "example file"
@@ -2276,6 +2308,9 @@ Returns the compilation buffer created."
     (define-key map [mouse-2] 'compile-goto-error)
     (define-key map [follow-link] 'mouse-face)
     (define-key map "\C-m" 'compile-goto-error)
+    (define-key map "\M-\C-m" 'push-button)
+    (define-key map [M-down-mouse-2] 'push-button)
+    (define-key map [M-mouse-2] 'push-button)
     map)
   "Keymap for compilation-message buttons.")
 (fset 'compilation-button-map compilation-button-map)

@@ -1,6 +1,6 @@
 ;;; calendar.el --- calendar functions  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1988-1995, 1997, 2000-2024 Free Software Foundation,
+;; Copyright (C) 1988-1995, 1997, 2000-2025 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Edward M. Reingold <reingold@cs.uiuc.edu>
@@ -90,6 +90,19 @@
 ;; <https://doi.org/10.1002/spe.4380230404>
 ;; <http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.42.6421&rep=rep1&type=pdf>
 
+;; A note on how dates are represented:
+
+;; The standard format for a (Gregorian) calendar date in this file is a
+;; list of integers (MONTH DAY YEAR) -- see the functions
+;; `calendar-extract-year', `calendar-extract-month', and
+;; `calendar-extract-day'.  Internally it also uses an "absolute" format
+;; which is an integer number of days since December 31, 1BC on the
+;; Gregorian calendar (see e.g. `calendar-absolute-from-gregorian'), and
+;; converts between different calendar scales by converting to and from
+;; the absolute format (see e.g. `calendar-iso-from-absolute' in
+;; cal-iso.el).  This representation is also useful for certain
+;; calculations; e.g. `calendar-day-of-week' is simply the absolute
+;; representation modulo 7, because December 31, 1BC is a Sunday.
 
 ;; A note on free variables:
 
@@ -2497,7 +2510,7 @@ ATTRLIST is a list with elements of the form :face face :foreground color."
     (if (not faceinfo)
         ;; No attributes to apply, so just use an existing-face.
         face
-      ;; FIXME should we be using numbered temp-faces, re-using where poss?
+      ;; FIXME should we be using numbered temp-faces, reusing where poss?
       (setq temp-face
             (make-symbol
              (concat ":caltemp"

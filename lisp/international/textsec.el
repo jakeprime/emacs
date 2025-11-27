@@ -1,6 +1,6 @@
 ;;; textsec.el --- Functions for handling homoglyphs and the like  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2022-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2022-2025 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -296,7 +296,7 @@ or use certain other unusual mixtures of characters."
                             ""
                           (concat ": " (string char)))
                         char
-                        (get-char-code-property char 'name)))))
+                        (char-to-name char)))))
      domain)
     ;; Does IDNA allow it?
     (unless (puny-highly-restrictive-domain-p domain)

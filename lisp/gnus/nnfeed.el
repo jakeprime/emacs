@@ -1,6 +1,6 @@
 ;;; nnfeed.el --- Generic feed backend for Gnus -*- lexical-binding: t -*-
 
-;; Copyright (C) 2023 Free Software Foundation, Inc.
+;; Copyright (C) 2023, 2025 Free Software Foundation, Inc.
 ;; Author: Daniel Semyonov <daniel@dsemy.com>
 
 ;; This file is part of GNU Emacs.
@@ -64,6 +64,7 @@
 
 (defcustom nnfeed-date-format "%F %X%p"
   "Format of displayed dates (see function `format-time-string')."
+  :version "30.1"
   :type 'string)
 
 (nnoo-declare nnfeed)
@@ -630,12 +631,21 @@ Only HEADERS of a type included in MIME are considered."
 (deffoo nnfeed-request-type (_group &optional _article)
   'unknown)
 
+;; FIXME: Works incorrectly when a group name contains spaces as Gnus actually
+;; separates the group name from the description with either a tab or a space.
+(defun nnfeed--group-description (name group)
+  "Return a description line for a GROUP called NAME."
+  (when-let ((desc (aref group 5))
+             ((not (string-blank-p desc))))
+    (insert name "\t" desc "\n")))
+
 (deffoo nnfeed-request-group-description (group &optional server)
   (when-let ((server (or server (nnfeed--current-server-no-prefix)))
              (g (nnfeed--group-data group server)))
     (with-current-buffer nntp-server-buffer
       (erase-buffer)
-      (insert group "	" (aref g 5) "\n"))))
+      (nnfeed--group-description group g)
+      t)))
 
 (deffoo nnfeed-request-list-newsgroups (&optional server)
   (when-let ((server (or server (nnfeed--current-server-no-prefix)))
@@ -643,9 +653,8 @@ Only HEADERS of a type included in MIME are considered."
              ((hash-table-p s)))
     (with-current-buffer nntp-server-buffer
       (erase-buffer)
-      (maphash (lambda (group g)
-                 (insert group "	" (aref g 5) "\n"))
-               s))))
+      (maphash #'nnfeed--group-description s)
+      t)))
 
 (deffoo nnfeed-request-rename-group (group new-name &optional server)
   (when-let ((server (or server (nnfeed--current-server-no-prefix)))

@@ -1,6 +1,6 @@
 /* Parameters and display hooks for terminal devices.
 
-Copyright (C) 1985-1986, 1993-1994, 2001-2024 Free Software Foundation,
+Copyright (C) 1985-1986, 1993-1994, 2001-2025 Free Software Foundation,
 Inc.
 
 This file is part of GNU Emacs.
@@ -522,11 +522,6 @@ struct terminal
 
   /* The terminal's keyboard object. */
   struct kboard *kboard;
-
-#ifdef HAVE_WINDOW_SYSTEM
-  /* Cache of images.  */
-  struct image_cache *image_cache;
-#endif /* HAVE_WINDOW_SYSTEM */
 
   /* Device-type dependent data shared amongst all frames on this terminal.  */
   union display_info

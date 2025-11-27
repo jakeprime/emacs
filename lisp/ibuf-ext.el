@@ -1,6 +1,6 @@
 ;;; ibuf-ext.el --- extensions for ibuffer  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2000-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2025 Free Software Foundation, Inc.
 
 ;; Author: Colin Walters <walters@verbum.org>
 ;; Maintainer: John Paul Wallington <jpw@gnu.org>
@@ -594,22 +594,16 @@ To evaluate a form without viewing the buffer, see `ibuffer-do-eval'."
    :modifier-p :maybe)
   (revert-buffer t t))
 
-;;;###autoload (autoload 'ibuffer-do-isearch "ibuf-ext")
-(define-ibuffer-op ibuffer-do-isearch ()
+;;;###autoload
+(defun ibuffer-do-isearch ()
   "Perform a `isearch-forward' in marked buffers."
-  (:interactive ()
-   :opstring "searched in"
-   :complex t
-   :modifier-p :maybe)
+  (interactive "" ibuffer-mode)
   (multi-isearch-buffers (ibuffer-get-marked-buffers)))
 
-;;;###autoload (autoload 'ibuffer-do-isearch-regexp "ibuf-ext")
-(define-ibuffer-op ibuffer-do-isearch-regexp ()
+;;;###autoload
+(defun ibuffer-do-isearch-regexp ()
   "Perform a `isearch-forward-regexp' in marked buffers."
-  (:interactive ()
-   :opstring "searched regexp in"
-   :complex t
-   :modifier-p :maybe)
+  (interactive "" ibuffer-mode)
   (multi-isearch-buffers-regexp (ibuffer-get-marked-buffers)))
 
 ;;;###autoload (autoload 'ibuffer-do-replace-regexp "ibuf-ext")

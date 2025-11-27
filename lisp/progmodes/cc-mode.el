@@ -1,6 +1,6 @@
 ;;; cc-mode.el --- major mode for editing C and similar languages -*- lexical-binding: t -*-
 
-;; Copyright (C) 1985, 1987, 1992-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 1987, 1992-2025 Free Software Foundation, Inc.
 
 ;; Authors:    2003- Alan Mackenzie
 ;;             1998- Martin Stjernholm
@@ -66,7 +66,7 @@
 ;; You can get the latest version of CC Mode, including PostScript
 ;; documentation and separate individual files from:
 ;;
-;;     https://cc-mode.sourceforge.net/
+;;     https://www.nongnu.org/cc-mode/
 ;;
 ;; You can join a moderated CC Mode announcement-only mailing list by
 ;; visiting
@@ -172,8 +172,8 @@
 ;; `c-font-lock-init' too to set up CC Mode's font lock support.
 ;;
 ;; See cc-langs.el for further info.  A small example of a derived mode
-;; is also available at <https://cc-mode.sourceforge.net/
-;; derived-mode-ex.el>.
+;; is also available at
+;; <https://www.nongnu.org/cc-mode/derived-mode-ex.el>.
 
 (defun c-leave-cc-mode-mode ()
   (when c-buffer-is-cc-mode
@@ -3325,6 +3325,22 @@ Key bindings:
 	      (insert "Package: " c-mode-bug-package)))
 	(insert (format "Buffer Style: %s\nc-emacs-features: %s\n"
 			style c-features)))))))
+
+
+;; Make entries in `major-mode-remap-defaults' to ensure that when CC
+;; Mode has been loaded, the symbols `c-mode' etc., will call CC Mode's
+;; modes rather than c-ts-mode etc..
+(when (boundp 'major-mode-remap-defaults)
+  (add-to-list 'major-mode-remap-defaults '(c++-mode . c++-ts-mode))
+  (add-to-list 'major-mode-remap-defaults '(c-mode . c-ts-mode))
+  (add-to-list 'major-mode-remap-defaults '(c-or-c++-mode . c-or-c++-ts-mode))
+  (let (entry)
+    (dolist (mode '(c-mode c++-mode c-or-c++-mode))
+      (if (and (setq entry (assq mode major-mode-remap-defaults))
+	       (null (cdr entry)))
+	  (setq major-mode-remap-defaults
+		(delq entry major-mode-remap-defaults)))
+      (push (cons mode nil) major-mode-remap-defaults))))
 
 
 (cc-provide 'cc-mode)

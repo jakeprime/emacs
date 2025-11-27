@@ -1,6 +1,6 @@
 /* xfaces.c -- "Face" primitives.
 
-Copyright (C) 1993-1994, 1998-2024 Free Software Foundation, Inc.
+Copyright (C) 1993-1994, 1998-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -637,6 +637,37 @@ x_free_gc (struct frame *f, struct android_gc *gc)
 			   Frames and faces
  ***********************************************************************/
 
+#ifdef HAVE_WINDOW_SYSTEM
+
+/* Find an existing image cache registered for a frame on F's display
+   and with a `scaling_col_width' of F's FRAME_COLUMN_WIDTH, or, in the
+   absence of an eligible image cache, allocate an image cache with the
+   same width value.  */
+
+struct image_cache *
+share_image_cache (struct frame *f)
+{
+  int width = max (10, FRAME_COLUMN_WIDTH (f));
+  Lisp_Object tail, frame;
+  struct image_cache *cache;
+
+  FOR_EACH_FRAME (tail, frame)
+    {
+      struct frame *x = XFRAME (frame);
+
+      if (FRAME_TERMINAL (x) == FRAME_TERMINAL (f)
+	  && FRAME_IMAGE_CACHE (x)
+	  && FRAME_IMAGE_CACHE (x)->scaling_col_width == width)
+	return FRAME_IMAGE_CACHE (x);
+    }
+
+  cache = make_image_cache ();
+  cache->scaling_col_width = width;
+  return cache;
+}
+
+#endif /* HAVE_WINDOW_SYSTEM */
+
 /* Initialize face cache and basic faces for frame F.  */
 
 void
@@ -647,14 +678,10 @@ init_frame_faces (struct frame *f)
     FRAME_FACE_CACHE (f) = make_face_cache (f);
 
 #ifdef HAVE_WINDOW_SYSTEM
-  /* Make the image cache.  */
+  /* Make or share an image cache.  */
   if (FRAME_WINDOW_P (f))
     {
-      /* We initialize the image cache when creating the first frame
-	 on a terminal, and not during terminal creation.  This way,
-	 `x-open-connection' on a tty won't create an image cache.  */
-      if (FRAME_IMAGE_CACHE (f) == NULL)
-	FRAME_IMAGE_CACHE (f) = make_image_cache ();
+      FRAME_IMAGE_CACHE (f) = share_image_cache (f);
       ++FRAME_IMAGE_CACHE (f)->refcount;
     }
 #endif /* HAVE_WINDOW_SYSTEM */
@@ -688,6 +715,11 @@ free_frame_faces (struct frame *f)
 	  --image_cache->refcount;
 	  if (image_cache->refcount == 0)
 	    free_image_cache (f);
+
+	  /* The `image_cache' field must be emptied, in case references
+	     to this dead frame should remain and be scanned by GC.
+	     (bug#71929) */
+	  FRAME_IMAGE_CACHE (f) = NULL;
 	}
     }
 #endif /* HAVE_WINDOW_SYSTEM */
@@ -704,9 +736,18 @@ recompute_basic_faces (struct frame *f)
 {
   if (FRAME_FACE_CACHE (f))
     {
+      bool non_basic_faces_cached =
+	FRAME_FACE_CACHE (f)->used > BASIC_FACE_ID_SENTINEL;
       clear_face_cache (false);
       if (!realize_basic_faces (f))
 	emacs_abort ();
+      /* The call to realize_basic_faces above recomputed the basic
+         faces and freed their fontsets, but if there are non-ASCII
+         faces in the cache, they might now be invalid, and they
+         reference fontsets that are no longer in Vfontset_table.  We
+         therefore must force complete regeneration of all frame faces.  */
+      if (non_basic_faces_cached)
+	f->face_change = true;
     }
 }
 
@@ -4618,8 +4659,8 @@ free_realized_face (struct frame *f, struct face *face)
 	  /* This function might be called with the frame's display
 	     connection deleted, in which event the callbacks below
 	     should not be executed, as they generate X requests.  */
-	  if (FRAME_X_DISPLAY (f))
-	    return;
+	  if (!FRAME_X_DISPLAY (f))
+	    goto free_face;
 #endif /* HAVE_X_WINDOWS */
 
 	  if (face->gc)
@@ -4638,6 +4679,9 @@ free_realized_face (struct frame *f, struct face *face)
 	}
 #endif /* HAVE_WINDOW_SYSTEM */
 
+#ifdef HAVE_X_WINDOWS
+    free_face:
+#endif /* HAVE_X_WINDOWS */
       xfree (face);
     }
 }

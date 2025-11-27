@@ -1,5 +1,5 @@
 /* Primitive operations on Lisp data types for GNU Emacs Lisp interpreter.
-   Copyright (C) 1985-1986, 1988, 1993-1995, 1997-2024 Free Software
+   Copyright (C) 1985-1986, 1988, 1993-1995, 1997-2025 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -239,7 +239,7 @@ a fixed set of types.  */)
         case PVEC_WINDOW: return Qwindow;
         case PVEC_SUBR:
           return XSUBR (object)->max_args == UNEVALLED ? Qspecial_form
-                 : SUBR_NATIVE_COMPILEDP (object) ? Qsubr_native_elisp
+                 : NATIVE_COMP_FUNCTIONP (object) ? Qnative_comp_function
                  : Qprimitive_function;
         case PVEC_CLOSURE:
           return CONSP (AREF (object, CLOSURE_CODE))
@@ -505,7 +505,9 @@ DEFUN ("user-ptrp", Fuser_ptrp, Suser_ptrp, 1, 1, 0,
 #endif
 
 DEFUN ("subrp", Fsubrp, Ssubrp, 1, 1, 0,
-       doc: /* Return t if OBJECT is a built-in function.  */)
+       doc: /* Return t if OBJECT is a built-in or native compiled Lisp function.
+
+See also `primitive-function-p' and `native-comp-function-p'.  */)
   (Lisp_Object object)
 {
   if (SUBRP (object))
@@ -754,7 +756,7 @@ global value outside of any lexical scope.  */)
    breaking backward compatibility, as some users of fboundp may
    expect t in particular, rather than any true value.  */
 DEFUN ("fboundp", Ffboundp, Sfboundp, 1, 1, 0,
-       doc: /* Return t if SYMBOL's function definition is not void.  */)
+       doc: /* Return t if SYMBOL's function definition is not nil.  */)
   (Lisp_Object symbol)
 {
   CHECK_SYMBOL (symbol);
@@ -780,12 +782,12 @@ See also `fmakunbound'.  */)
 }
 
 DEFUN ("fmakunbound", Ffmakunbound, Sfmakunbound, 1, 1, 0,
-       doc: /* Make SYMBOL's function definition be void.
+       doc: /* Make SYMBOL's function definition be nil.
 Return SYMBOL.
 
-If a function definition is void, trying to call a function by that
-name will cause a `void-function' error.  For more details, see Info
-node `(elisp) Function Cells'.
+If a function definition is nil, trying to call a function by
+that name will cause a `void-function' error.  For more details, see
+Info node `(elisp) Function Cells'.
 
 See also `makunbound'.  */)
   (register Lisp_Object symbol)
@@ -798,7 +800,7 @@ See also `makunbound'.  */)
 }
 
 DEFUN ("symbol-function", Fsymbol_function, Ssymbol_function, 1, 1, 0,
-       doc: /* Return SYMBOL's function definition, or nil if that is void.  */)
+       doc: /* Return SYMBOL's function definition.  */)
   (Lisp_Object symbol)
 {
   CHECK_SYMBOL (symbol);
@@ -829,8 +831,9 @@ Doing that might make Emacs dysfunctional, and might even crash Emacs.  */)
 
 DEFUN ("bare-symbol", Fbare_symbol, Sbare_symbol, 1, 1, 0,
        doc: /* Extract, if need be, the bare symbol from SYM.
-SYM is either a symbol or a symbol with position.
-Ignore `symbols-with-pos-enabled'.  */)
+SYM must be either a symbol or a symbol with position, otherwise
+the function will signal the `wrong-type-argument' error.
+This function ignores `symbols-with-pos-enabled'.  */)
   (register Lisp_Object sym)
 {
   if (BARE_SYMBOL_P (sym))
@@ -853,7 +856,8 @@ DEFUN ("remove-pos-from-symbol", Fremove_pos_from_symbol,
        Sremove_pos_from_symbol, 1, 1, 0,
        doc: /* If ARG is a symbol with position, return it without the position.
 Otherwise, return ARG unchanged.  Ignore `symbols-with-pos-enabled'.
-Compare with `bare-symbol'.  */)
+Compare with `bare-symbol', which does the same, but signals an error
+if ARG is not a symbol.  */)
   (register Lisp_Object arg)
 {
   if (SYMBOL_WITH_POS_P (arg))
@@ -908,7 +912,7 @@ signal a `cyclic-function-indirection' error.  */)
 
   if (!NILP (Vnative_comp_enable_subr_trampolines)
       && SUBRP (function)
-      && !SUBR_NATIVE_COMPILEDP (function))
+      && !NATIVE_COMP_FUNCTIONP (function))
     CALLN (Ffuncall, Qcomp_subr_trampoline_install, symbol);
 #endif
 
@@ -1055,12 +1059,11 @@ SUBR must be a built-in function.  */)
   return build_string (name);
 }
 
-DEFUN ("subr-native-elisp-p", Fsubr_native_elisp_p, Ssubr_native_elisp_p, 1, 1,
-       0, doc: /* Return t if the object is native compiled lisp
-function, nil otherwise.  */)
+DEFUN ("native-comp-function-p", Fnative_comp_function_p, Snative_comp_function_p, 1, 1,
+       0, doc: /* Return t if the object is native compiled Lisp function, nil otherwise.  */)
   (Lisp_Object object)
 {
-  return SUBR_NATIVE_COMPILEDP (object) ? Qt : Qnil;
+  return NATIVE_COMP_FUNCTIONP (object) ? Qt : Qnil;
 }
 
 DEFUN ("subr-native-lambda-list", Fsubr_native_lambda_list,
@@ -1072,7 +1075,7 @@ function or t otherwise.  */)
   CHECK_SUBR (subr);
 
 #ifdef HAVE_NATIVE_COMP
-  if (SUBR_NATIVE_COMPILED_DYNP (subr))
+  if (NATIVE_COMP_FUNCTION_DYNP (subr))
     return XSUBR (subr)->lambda_list;
 #endif
   return Qt;
@@ -1149,7 +1152,7 @@ Value, if non-nil, is a list (interactive SPEC).  */)
 
   if (SUBRP (fun))
     {
-      if (SUBR_NATIVE_COMPILEDP (fun) && !NILP (XSUBR (fun)->intspec.native))
+      if (NATIVE_COMP_FUNCTIONP (fun) && !NILP (XSUBR (fun)->intspec.native))
 	return XSUBR (fun)->intspec.native;
 
       const char *spec = XSUBR (fun)->intspec.string;
@@ -4163,7 +4166,8 @@ syms_of_data (void)
   DEFSYM (Qsubr, "subr");
   DEFSYM (Qspecial_form, "special-form");
   DEFSYM (Qprimitive_function, "primitive-function");
-  DEFSYM (Qsubr_native_elisp, "subr-native-elisp");
+  DEFSYM (Qsubr_native_elisp, "subr-native-elisp"); /* Deprecated name.  */
+  DEFSYM (Qnative_comp_function, "native-comp-function");
   DEFSYM (Qbyte_code_function, "byte-code-function");
   DEFSYM (Qinterpreted_function, "interpreted-function");
   DEFSYM (Qbuffer, "buffer");
@@ -4298,7 +4302,7 @@ syms_of_data (void)
   defsubr (&Sbyteorder);
   defsubr (&Ssubr_arity);
   defsubr (&Ssubr_name);
-  defsubr (&Ssubr_native_elisp_p);
+  defsubr (&Snative_comp_function_p);
   defsubr (&Ssubr_native_lambda_list);
   defsubr (&Ssubr_type);
 #ifdef HAVE_NATIVE_COMP

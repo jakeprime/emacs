@@ -1,6 +1,6 @@
 /* Fontset handler.
 
-Copyright (C) 2001-2024 Free Software Foundation, Inc.
+Copyright (C) 2001-2025 Free Software Foundation, Inc.
 Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
   2005, 2006, 2007, 2008, 2009, 2010, 2011
   National Institute of Advanced Industrial Science and Technology (AIST)
@@ -668,6 +668,7 @@ fontset_find_font (Lisp_Object fontset, int c, struct face *face,
 	  font_object = font_open_for_lface (f, font_entity, face->lface,
 					     FONT_DEF_SPEC (font_def));
 
+#ifdef HAVE_ANDROID
 	  /* If the font registry is not the same as explicitly
 	     specified in the font spec, do not cache the font.
 	     TrueType fonts have contrived character map selection
@@ -692,10 +693,13 @@ fontset_find_font (Lisp_Object fontset, int c, struct face *face,
 			    Qiso10646_1)))
 	      goto strangeness;
 	  }
+#endif /* HAVE_ANDROID */
 
 	  if (NILP (font_object))
 	    {
+#ifdef HAVE_ANDROID
 	    strangeness:
+#endif /* HAVE_ANDROID */
 	      /* Something strange happened, perhaps because of a
 		 Font-backend problem.  To avoid crashing, record
 		 that this spec is unusable.  It may be better to find
@@ -1877,7 +1881,7 @@ fontset_from_font (Lisp_Object font_object)
 
 /* Update auto_fontset_alist for FONTSET.  When an ASCII font of
    FONTSET is changed, we delete an entry of FONTSET if any from
-   auto_fontset_alist so that FONTSET is not re-used by
+   auto_fontset_alist so that FONTSET is not reused by
    fontset_from_font.  */
 
 static void

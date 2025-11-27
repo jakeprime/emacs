@@ -1,6 +1,6 @@
 ;;; comp-common.el --- common code -*- lexical-binding: t -*-
 
-;; Copyright (C) 2023-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2023-2025 Free Software Foundation, Inc.
 
 ;; Author: Andrea Corallo <acorallo@gnu.org>
 ;; Keywords: lisp
@@ -272,6 +272,7 @@ Used to modify the compiler environment."
     (member (function (t list) list))
     (memq (function (t list) list))
     (memql (function (t list) list))
+    (message (function (string &rest t) string))
     (min (function ((or number marker) &rest (or number marker)) number))
     (minibuffer-selected-window (function () (or window null)))
     (minibuffer-window (function (&optional frame) window))
@@ -518,7 +519,7 @@ itself."
         (if-let ((delc-type (function-get function 'function-type)))
             ;; Declared Lisp function
             (setf type-spec delc-type)
-          (when (subr-native-elisp-p f)
+          (when (native-comp-function-p f)
             ;; Native compiled inferred
             (setf kind 'inferred
                   type-spec (subr-type f))))))

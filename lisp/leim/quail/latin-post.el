@@ -1,6 +1,6 @@
 ;;; latin-post.el --- Quail packages for inputting various European characters  -*-coding: utf-8; lexical-binding: t -*-
 
-;; Copyright (C) 1997-1998, 2001-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1997-1998, 2001-2025 Free Software Foundation, Inc.
 ;; Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
 ;;   2006, 2007, 2008, 2009, 2010, 2011
 ;;   National Institute of Advanced Industrial Science and Technology (AIST)
@@ -2302,6 +2302,9 @@ of characters from a single Latin-N charset.
   subscript  |    _    | 0_ -> ₀   1_ -> ₁   +_ -> ₊   -_ -> ₋
   others     |    /    | s/ -> ß   ?/ -> ¿   !/ -> ¡   // -> °   o/ -> œ
              |    /    | 2/ -> ½   3/ -> ¾   4/ -> ?¼
+             |    [    | \\='[ -> ‘  \"[ -> “
+             |    ]    | \\='] -> ’  \"] -> ”
+             |    ,    | \\=', -> ‚  \", -> „
              | various | << -> «   >> -> »   o_ -> º   a_ -> ª
 
 Doubling the postfix separates the letter and postfix: e.g. a\\='\\=' -> a\\='
@@ -2309,6 +2312,12 @@ Doubling the postfix separates the letter and postfix: e.g. a\\='\\=' -> a\\='
 
 ;; Fixme: ¦ § ¨ © ¬ ± ´ µ ¶ · ¸ × ÷
 (quail-define-rules
+ ("'[" ?‘)
+ ("']" ?’)
+ ("\"[" ?“)
+ ("\"]" ?”)
+ ("\"," ?„)
+ ("'," ?‚)
  ("2/" ?½)
  ("3/" ?¾)
  ("4/" ?¼)
@@ -2341,6 +2350,8 @@ Doubling the postfix separates the letter and postfix: e.g. a\\='\\=' -> a\\='
  ("//" ?°)
  ("<<" ?\«)
  (">>" ?\»)
+ ("<~" ?\‹)
+ (">~" ?\›)
  ("?/" ?¿)
  ("$/" ?£)
  ("$/" ?¤)
@@ -2532,6 +2543,12 @@ Doubling the postfix separates the letter and postfix: e.g. a\\='\\=' -> a\\='
  ("z~" ?ž)
  ("--" ?¯)
 
+ ("'[[" ["'["])
+ ("']]" ["']"])
+ ("\"[[" ["\"["])
+ ("\"]]" ["\"]"])
+ ("\",," ["\","])
+ ("',," ["',"])
  ("2//" ["2/"])
  ("3//" ["3/"])
  ("4//" ["4/"])
@@ -2564,6 +2581,8 @@ Doubling the postfix separates the letter and postfix: e.g. a\\='\\=' -> a\\='
  ("///" ["//"])
  ("<<<" ["<<"])
  (">>>" [">>"])
+ ("<~~" ["<~"])
+ (">~~" [">~"])
  ("?//" ["?/"])
  ("$//" ["$/"])
  ("A''" ["A'"])

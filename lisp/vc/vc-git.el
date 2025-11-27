@@ -1,6 +1,6 @@
 ;;; vc-git.el --- VC backend for the git version control system -*- lexical-binding: t -*-
 
-;; Copyright (C) 2006-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2006-2025 Free Software Foundation, Inc.
 
 ;; Author: Alexandre Julliard <julliard@winehq.org>
 ;; Keywords: vc tools
@@ -739,9 +739,9 @@ or an empty string if none."
   "RET"     #'push-button)
 
 (defconst vc-git-stash-shared-help
-  "\\<vc-git-stash-shared-map>\\[vc-git-stash]: Create named stash\n\\[vc-git-stash-snapshot]: Snapshot stash")
+  "\\<vc-git-stash-shared-map>\\[vc-git-stash]: Create named stash\n\\[vc-git-stash-snapshot]: Snapshot: stash from current tree")
 
-(defconst vc-git-stash-list-help (concat "\\<vc-git-stash-map>mouse-3: Show stash menu\n\\[vc-git-stash-show-at-point], =: Show stash\n\\[vc-git-stash-apply-at-point]: Apply stash\n\\[vc-git-stash-pop-at-point]: Apply and remove stash (pop)\n\\[vc-git-stash-delete-at-point]: Delete stash\n"
+(defconst vc-git-stash-list-help (concat "\\<vc-git-stash-map>mouse-3: Show stash menu\n\\[vc-git-stash-show-at-point], =: Show stash\n\\[vc-git-stash-apply-at-point]: Apply stash\n\\[vc-git-stash-pop-at-point]: Apply and remove stash (pop)\n\\[vc-git-stash-delete-at-point]: Delete (drop) stash\n"
                                          vc-git-stash-shared-help))
 
 (defun vc-git--make-button-text (show count1 count2)
@@ -779,19 +779,19 @@ or an empty string if none."
   (let ((map (make-sparse-keymap "Git Stash")))
     (define-key map [sn]
       '(menu-item "Snapshot Stash" vc-git-stash-snapshot
-		  :help "Snapshot stash"))
+		  :help "Create stash from the current tree state"))
     (define-key map [cr]
       '(menu-item "Create Named Stash" vc-git-stash
 		  :help "Create named stash"))
     (define-key map [de]
       '(menu-item "Delete Stash" vc-git-stash-delete-at-point
-		  :help "Delete the current stash"))
+		  :help "Delete (drop) the current stash"))
     (define-key map [ap]
       '(menu-item "Apply Stash" vc-git-stash-apply-at-point
 		  :help "Apply the current stash and keep it in the stash list"))
     (define-key map [po]
       '(menu-item "Apply and Remove Stash (Pop)" vc-git-stash-pop-at-point
-		  :help "Apply the current stash and remove it"))
+		  :help "Apply the current stash and remove it (pop)"))
     (define-key map [sh]
       '(menu-item "Show Stash" vc-git-stash-show-at-point
 		  :help "Show the contents of the current stash"))
@@ -1452,9 +1452,9 @@ the file renames.  The downsides is that the log produced this
 way may omit certain (merge) commits, and that `log-view-diff'
 fails on commits that used the previous name, in that log buffer.
 
-When this variable is nil, and the log ends with a rename, we
-show a button below that which allows to show the log for the
-file name before the rename."
+When this variable is nil, and the log ends with a rename, there is a
+button which you can press to show the log for the file name before the
+rename."
   :type 'boolean
   :version "26.1")
 
@@ -2177,7 +2177,7 @@ This command shares argument histories with \\[rgrep] and \\[grep]."
 
 (defun vc-git-command (buffer okstatus file-or-list &rest flags)
   "A wrapper around `vc-do-command' for use in vc-git.el.
-The difference to vc-do-command is that this function always invokes
+The difference to `vc-do-command' is that this function always invokes
 `vc-git-program'."
   (let ((coding-system-for-read
          (or coding-system-for-read vc-git-log-output-coding-system))

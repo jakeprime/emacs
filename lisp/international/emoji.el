@@ -1,6 +1,6 @@
 ;;; emoji.el --- Inserting emojis  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2021-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2021-2025 Free Software Foundation, Inc.
 
 ;; Author: Lars Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: fun
@@ -164,12 +164,12 @@ when the command was invoked."
   (let ((buf (current-buffer)))
     (emoji--init)
     (switch-to-buffer (get-buffer-create "*Emoji*"))
+    (setq-local emoji--insert-buffer buf)
     ;; Don't regenerate the buffer if it already exists -- this will
     ;; leave point where it was the last time it was used.
     (when (zerop (buffer-size))
       (let ((inhibit-read-only t))
         (emoji-list-mode)
-        (setq-local emoji--insert-buffer buf)
         (emoji--list-generate nil (cons nil emoji--labels))
         (goto-char (point-min))))))
 
@@ -245,7 +245,7 @@ the name is not known."
 
 (defun emoji--name (glyph)
   (or (gethash glyph emoji--names)
-      (get-char-code-property (aref glyph 0) 'name)))
+      (char-to-name (aref glyph 0))))
 
 (defvar-keymap emoji-list-mode-map
   "RET" #'emoji-list-select

@@ -1,6 +1,6 @@
 ;;; frame.el --- multi-frame management independent of window systems  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1993-1994, 1996-1997, 2000-2024 Free Software
+;; Copyright (C) 1993-1994, 1996-1997, 2000-2025 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -2021,7 +2021,7 @@ workarea attribute."
 (declare-function android-frame-list-z-order "androidfns.c" (&optional display))
 
 (defun frame-list-z-order (&optional display)
-  "Return list of Emacs' frames, in Z (stacking) order.
+  "Return list of Emacs's frames, in Z (stacking) order.
 The optional argument DISPLAY specifies which display to poll.
 DISPLAY should be either a frame or a display name (a string).
 If omitted or nil, that stands for the selected frame's display.
@@ -2465,6 +2465,10 @@ details depend on the platform and environment.
 The `source' attribute describes the source from which the
 information was obtained.  On X, this may be one of: \"Gdk\",
 \"XRandR 1.5\", \"XRandr\", \"Xinerama\", or \"fallback\".
+If it is \"fallback\", it means Emacs was built without GTK
+and without XrandR or Xinerama extensions, in which case the
+information about multiple physical monitors will be provided
+as if they all as a whole formed a single monitor.
 
 A frame is dominated by a physical monitor when either the
 largest area of the frame resides in the monitor, or the monitor

@@ -1,6 +1,6 @@
 @c -*-texinfo-*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990--1995, 1998--1999, 2001--2024 Free Software
+@c Copyright (C) 1990--1995, 1998--1999, 2001--2025 Free Software
 @c Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @node Minibuffers
@@ -1249,6 +1249,16 @@ different function to completely override the normal behavior of
 @code{completing-read}.
 @end defvar
 
+@findex completing-read-multiple
+@vindex crm-separator
+If you need to prompt the user for several strings, like several
+elements of a list or several parameters (e.g., user, host, and port) of
+a connection, you can use @code{completing-read-multiple}.  It allows
+typing several strings separated by a separator string (by default, tabs
+and commas; customize @code{crm-separator} to change that), and provides
+completion for each individual string the user types.  It returns the
+strings that were read, as a list.
+
 @node Completion Commands
 @subsection Minibuffer Commands that Do Completion
 
@@ -1910,8 +1920,8 @@ pairs.  The following properties are supported:
 @item :category
 The value should be a symbol describing what kind of text the
 completion function is trying to complete.  If the symbol matches one
-of the keys in @code{completion-category-overrides}, the usual
-completion behavior is overridden.  @xref{Completion Variables}.
+of the keys in @code{completion-category-overrides} described above,
+the usual completion behavior is overridden.
 
 @item :annotation-function
 The value should be a function to add annotations in the completions
@@ -2562,9 +2572,9 @@ This function uses @code{read-passwd-mode}, a minor mode.  It binds two
 keys in the minbuffer: @kbd{C-u} (@code{delete-minibuffer-contents})
 deletes the password, and @kbd{TAB}
 (@code{read-passwd--toggle-visibility}) toggles the visibility of the
-password.  There is also an additional icon in the mode-line.  Clicking
-on this icon with @key{mouse-1} toggles the visibility of the password
-as well.
+password.  There is also an additional icon in the mode-line's
+@code{global-mode-string}.  Clicking on this icon with @key{mouse-1}
+toggles the visibility of the password as well.
 @end defun
 
 @node Minibuffer Commands

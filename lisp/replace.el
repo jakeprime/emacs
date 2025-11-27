@@ -1,6 +1,6 @@
 ;;; replace.el --- replace commands for Emacs -*- lexical-binding: t -*-
 
-;; Copyright (C) 1985-1987, 1992, 1994, 1996-1997, 2000-2024 Free
+;; Copyright (C) 1985-1987, 1992, 1994, 1996-1997, 2000-2025 Free
 ;; Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -929,7 +929,7 @@ regexp from the user."
       (or result input))))
 
 (defun read-regexp-case-fold-search (regexp)
-  "Return a value for `case-fold-search' based on REGEXP and current settings.
+  "Return the value for `case-fold-search' based on REGEXP and current settings.
 REGEXP is a string as returned by `read-regexp'."
   (let ((fold (get-text-property 0 'case-fold regexp)))
     (cond
@@ -2448,19 +2448,21 @@ To be added to `context-menu-functions'."
   "Type \\`SPC' or \\`y' to replace one match, Delete or \\`n' to skip to next,
 \\`RET' or \\`q' to exit, Period to replace one match and exit,
 \\`,' to replace but not move point immediately,
-\\`C-r' to enter recursive edit (\\[exit-recursive-edit] to get out again),
-\\`C-w' to delete match and recursive edit,
-\\`C-l' to clear the screen, redisplay, and offer same replacement again,
 \\`!' to replace all remaining matches in this buffer with no more questions,
+\\`C-r' to enter recursive edit (\\[exit-recursive-edit] to get out again),
+\\`C-w' to delete match and then enter recursive edit,
 \\`^' to move point back to previous match,
 \\`u' to undo previous replacement,
 \\`U' to undo all replacements,
 \\`e' to edit the replacement string.
 \\`E' to edit the replacement string with exact case.
-In multi-buffer replacements type \\`Y' to replace all remaining
-matches in all remaining buffers with no more questions,
-\\`N' to skip to the next buffer without replacing remaining matches
-in the current buffer."
+\\`C-l' to clear the screen, redisplay, and offer same replacement again,
+\\`Y' to replace all remaining matches in all remaining buffers (in
+multi-buffer replacements) with no more questions,
+\\`N' (in multi-buffer replacements) to skip to the next buffer without
+replacing remaining matches in the current buffer.
+Any other character exits the interactive replacement loop, and is then
+re-executed as a normal key sequence."
   "Help message while in `query-replace'.")
 
 (defvar query-replace-map

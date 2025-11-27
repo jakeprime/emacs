@@ -1,6 +1,6 @@
 ;;; faces.el --- Lisp faces -*- lexical-binding: t -*-
 
-;; Copyright (C) 1992-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1992-2025 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: internal
@@ -95,9 +95,10 @@ a font height that isn't optimal."
          (internal-set-font-selection-order value)))
 
 
-;; In the absence of Fontconfig support, Monospace and Sans Serif are
-;; unavailable, and we fall back on the courier and helv families,
-;; which are generally available.
+;; We use Fontconfig if we have it.  This list is an alternative
+;; mechanism to fall back to in the absence of Fontconfig.
+;; In that situation, Monospace and Sans Serif are unavailable, and we
+;; turn to the courier and helv families, which are generally available.
 (defcustom face-font-family-alternatives
   (mapcar (lambda (arg) (mapcar 'purecopy arg))
   '(("Monospace" "courier" "fixed")
@@ -1102,7 +1103,7 @@ of the default face.  Value is FACE."
   "Text string to display as the sample text for `read-face-name'.")
 
 (defun read-face-name (prompt &optional default multiple)
-  "Read one or more face names, prompting with PROMPT.
+  "Read and return one or more face names, strings, prompting with PROMPT.
 PROMPT should not end in a space or a colon.
 
 If DEFAULT is non-nil, it should be a face (a symbol) or a face
@@ -1383,7 +1384,7 @@ of a global face.  Value is the new attribute value."
 		  (pattern &optional face frame maximum width))
 
 (defun read-face-font (face &optional frame)
-  "Read the name of a font for FACE on FRAME.
+  "Read and return the string name of the font for FACE on FRAME.
 If optional argument FRAME is nil or omitted, use the selected frame."
   (let ((completion-ignore-case t))
     (completing-read (format-message
@@ -1991,7 +1992,7 @@ If omitted or nil, that stands for the selected frame's display."
 
 (defun read-color (&optional prompt convert-to-RGB allow-empty-name msg
 			     foreground face)
-  "Read a color name or RGB triplet.
+  "Read a color name or RGB triplet, return a string, the color name or RGB.
 Completion is available for color names, but not for RGB triplets.
 
 RGB triplets have the form \"#RRGGBB\".  Each of the R, G, and B
@@ -2469,6 +2470,10 @@ If you set `term-file-prefix' to nil, this function does nothing."
   "Basic underlined face."
   :group 'basic-faces)
 
+;; Ideally, in Emacs's default look, we'd like the default and
+;; fixed-pitch faces to use two different monospace typefaces so that
+;; they're visually distinct.  At present, that's achieved on MS-Windows
+;; and macOS, but not on platforms that use Fontconfig.  See bug#79083.
 (defface fixed-pitch
   '((t :family "Monospace"))
   "The basic fixed-pitch face."

@@ -1,6 +1,6 @@
 ;;; help.el --- help commands for Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985-1986, 1993-1994, 1998-2024 Free Software
+;; Copyright (C) 1985-1986, 1993-1994, 1998-2025 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -114,6 +114,7 @@ buffer.")
   "R"    #'info-display-manual
   "s"    #'describe-syntax
   "t"    #'help-with-tutorial
+  "4 s"  #'help-find-source
   "v"    #'describe-variable
   "w"    #'where-is
   "x"    #'describe-command
@@ -418,6 +419,7 @@ Do not call this in the scope of `with-help-window'."
         "Search documentation of functions, variables, and other items")
        ("describe-command" "Show help for command")
        ("describe-function" "Show help for function")
+       ("help-find-source" "Show the source for what's being described in *Help*")
        ("describe-variable" "Show help for variable")
        ("describe-symbol" "Show help for function or variable"))
       ("Manuals"
@@ -881,7 +883,10 @@ If INSERT (the prefix arg) is non-nil, insert the message in the buffer."
       (let ((otherstring (help--key-description-fontified untranslated)))
 	(if (equal string otherstring)
 	    string
-	  (format "%s (translated from %s)" string otherstring))))))
+          (if-let ((char-name (and (length= string 1)
+                                   (char-to-name (aref string 0)))))
+              (format "%s '%s' (translated from %s)" string char-name otherstring)
+            (format "%s (translated from %s)" string otherstring)))))))
 
 (defun help--binding-undefined-p (defn)
   (or (null defn) (integerp defn) (equal defn #'undefined)))
@@ -1200,7 +1205,7 @@ current buffer."
 	    (describe-function-1 defn)))))))
 
 (defun search-forward-help-for-help ()
-  "Search forward in the help-for-help window.
+  "Search forward in the `help-for-help' window.
 This command is meant to be used after issuing the \\[help-for-help] command."
   (interactive)
   (unless (get-buffer help-for-help-buffer-name)
@@ -1662,7 +1667,10 @@ Return nil if the key sequence is too long."
 (defun help--describe-command (definition &optional translation)
   (cond ((or (stringp definition) (vectorp definition))
          (if translation
-             (insert (key-description definition nil) "\n")
+             (insert (concat (key-description definition nil)
+                             (when-let ((char-name (char-to-name (aref definition 0))))
+                               (format "\t%s" char-name))
+                             "\n"))
            ;; These should be rare nowadays, replaced by `kmacro's.
            (insert "Keyboard Macro\n")))
         ((keymapp definition)
@@ -2255,7 +2263,10 @@ The `temp-buffer-window-setup-hook' hook is called."
   (let ((msg (eval help-form t)))
     (if (stringp msg)
 	(with-output-to-temp-buffer " *Char Help*"
-	  (princ msg)))))
+          ;; Use `insert' instead of `princ' so that keys in `help-form'
+          ;; are displayed with `help-key-binding' face (bug#77118).
+          (with-current-buffer standard-output
+            (insert msg))))))
 
 (defun help--append-keystrokes-help (str)
   (let* ((keys (this-single-command-keys))
@@ -2373,7 +2384,7 @@ the same names as used in the original source code, when possible."
             (dolist (arg arglist)
               (unless (and (symbolp arg)
                            (let ((name (symbol-name arg)))
-                             (if (eq (aref name 0) ?&)
+                             (if (and (> (length name) 0) (eq (aref name 0) ?&))
                                  (memq arg '(&rest &optional))
                                (not (string-search "." name)))))
                 (setq valid nil)))

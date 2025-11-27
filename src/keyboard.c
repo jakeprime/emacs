@@ -1,6 +1,6 @@
 /* Keyboard and mouse input; editor command loop.
 
-Copyright (C) 1985-1989, 1993-1997, 1999-2024 Free Software Foundation,
+Copyright (C) 1985-1989, 1993-1997, 1999-2025 Free Software Foundation,
 Inc.
 
 This file is part of GNU Emacs.
@@ -2522,7 +2522,7 @@ read_char (int commandflag, Lisp_Object map,
 	   Lisp_Object prev_event,
 	   bool *used_mouse_menu, struct timespec *end_time)
 {
-  Lisp_Object c;
+  volatile Lisp_Object c;
   sys_jmp_buf local_getcjmp;
   sys_jmp_buf save_jump;
   Lisp_Object tem, save;
@@ -2681,7 +2681,7 @@ read_char (int commandflag, Lisp_Object map,
 	    /* Normal case: no input arrived during redisplay.  */
 	    break;
 
-	  /* Input arrived and pre-empted redisplay.
+	  /* Input arrived and preempted redisplay.
 	     Process any events which are not user-visible.  */
 	  swallow_events (false);
 	  /* If that cleared input_pending, try again to redisplay.  */
@@ -3135,8 +3135,23 @@ read_char (int commandflag, Lisp_Object map,
 	  /* Change menu-bar to (menu-bar) as the event "position".  */
 	  POSN_SET_POSN (xevent_start (c), list1 (posn));
 
-	  also_record = c;
-	  Vunread_command_events = Fcons (c, Vunread_command_events);
+	  /* Should a command call `sit-for', or another command that
+	     provides a timespec to Fread_event and co., the original
+	     event will not subsequently be entered into
+	     this_command_keys unless Qt be specified below.
+
+	     The same is the case in a number of other scenarios where
+	     reread is true, but if so, event recording is to be
+	     suppressed anyway.  */
+
+	  if (end_time)
+	    Vunread_command_events = Fcons (Fcons (Qt, c),
+					    Vunread_command_events);
+	  else
+	    {
+	      also_record = c;
+	      Vunread_command_events = Fcons (c, Vunread_command_events);
+	    }
 	  c = posn;
 	}
     }
@@ -11898,7 +11913,12 @@ Before suspending, run the normal hook `suspend-hook'.
 After resumption run the normal hook `suspend-resume-hook'.
 
 Some operating systems cannot stop the Emacs process and resume it later.
-On such systems, Emacs starts a subshell instead of suspending.  */)
+On such systems, Emacs starts a subshell instead of suspending.
+
+On some operating systems, stuffing characters into terminal input
+buffer requires special privileges or is not supported at all.
+On such systems, calling this function with non-nil STUFFSTRING might
+either signal an error or silently fail to stuff the characters.  */)
   (Lisp_Object stuffstring)
 {
   specpdl_ref count = SPECPDL_INDEX ();

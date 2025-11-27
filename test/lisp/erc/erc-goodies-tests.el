@@ -1,6 +1,6 @@
 ;;; erc-goodies-tests.el --- Tests for erc-goodies  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2023-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2023-2025 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 ;;
@@ -157,7 +157,7 @@
         (search-forward "BlackOn")
         (should (eq (get-text-property (point) 'mouse-face)
                     'erc-spoiler-face)))
-      ;; Start wtih ERC default face.
+      ;; Start with ERC default face.
       (erc-goodies-tests--assert-face
        0 "BEGIN " 'erc-default-face
        '(fg:erc-color-face0 bg:erc-color-face0))
@@ -168,7 +168,7 @@
       ;; Masked in all black.
       (erc-goodies-tests--assert-face
        20 "BlackOnBlack" '(fg:erc-color-face1 bg:erc-color-face1) nil)
-      ;; Explicit "default" code ignoerd.
+      ;; Explicit "default" code ignored.
       (erc-goodies-tests--assert-face
        34 "Default" '(erc-default-face)
        '(fg:erc-color-face1 bg:erc-color-face1))

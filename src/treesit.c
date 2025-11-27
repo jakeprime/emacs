@@ -1,6 +1,6 @@
 /* Tree-sitter integration for GNU Emacs.
 
-Copyright (C) 2021-2024 Free Software Foundation, Inc.
+Copyright (C) 2021-2025 Free Software Foundation, Inc.
 
 Maintainer: Yuan Fu <casouri@gmail.com>
 
@@ -404,7 +404,7 @@ init_treesit_functions (void)
    buffer's parser list.  The discussion can be found in bug#59693.  */
 
 
-/*** Initialization */
+/*** Initialization  */
 
 static Lisp_Object Vtreesit_str_libtree_sitter;
 static Lisp_Object Vtreesit_str_tree_sitter;
@@ -426,14 +426,15 @@ static Lisp_Object Vtreesit_str_space;
 static Lisp_Object Vtreesit_str_equal;
 static Lisp_Object Vtreesit_str_match;
 static Lisp_Object Vtreesit_str_pred;
+static Lisp_Object Vtreesit_str_empty;
 
 /* This is the limit on recursion levels for some tree-sitter
    functions.  Remember to update docstrings when changing this value.
 
    If we think of programs and AST, it is very rare for any program to
-   have a very deep AST. For example, you would need 1000+ levels of
+   have a very deep AST.  For example, you would need 1000+ levels of
    nested if-statements, or a struct somehow nested for 1000+ levels.
-   It’s hard for me to imagine any hand-written or machine generated
+   It's hard for me to imagine any hand-written or machine generated
    program to be like that.  So I think 1000 is already generous.  If
    we look at xdisp.c, its AST only have 30 levels.  */
 #define TREESIT_RECURSION_LIMIT 1000
@@ -485,10 +486,59 @@ treesit_initialize (void)
 }
 
 
-/*** Loading language library */
+/*** Debugging */
 
-/* Translates a symbol treesit-<lang> to a C name
-   treesit_<lang>.  */
+void treesit_debug_print_parser_list (char *, Lisp_Object);
+
+void
+treesit_debug_print_parser_list (char *msg, Lisp_Object parser)
+{
+  struct buffer *buf = XBUFFER (XTS_PARSER (parser)->buffer);
+  char *buf_name = SSDATA (BVAR (buf, name));
+  printf ("%s (%s) [%s] <%s>: %td(%td)-(%td)%td {\n",
+	  msg == NULL ? "" : msg,
+	  SSDATA (SYMBOL_NAME (Vthis_command)),
+	  SSDATA (SYMBOL_NAME (XTS_PARSER (parser)->language_symbol)),
+	  buf_name, BUF_BEG (buf),
+	  BUF_BEGV (buf), BUF_ZV (buf), BUF_Z (buf));
+  Lisp_Object tail = BVAR (buf, ts_parser_list);
+
+  FOR_EACH_TAIL (tail)
+    {
+      struct Lisp_TS_Parser *parser = XTS_PARSER (XCAR (tail));
+      printf ("[%s %s %s %td-%td T:%td]\n", SSDATA (SYMBOL_NAME (parser->language_symbol)),
+	      SSDATA (SYMBOL_NAME (parser->tag)),
+	      parser->need_reparse ? "NEED-R" : "NONEED",
+	      parser->visible_beg, parser->visible_end,
+	      parser->timestamp);
+      /* Print ranges. */
+      uint32_t len;
+      const TSRange *ranges
+	= ts_parser_included_ranges (parser->parser, &len);
+
+      if (!(len == 1 && ranges[0].start_byte == 0 && ranges[0].end_byte == -1))
+	{
+	  for (int idx = 0; idx < len; idx++)
+	    {
+	      TSRange range = ranges[idx];
+	      printf (" [%"PRIu32", %"PRIu32")", range.start_byte, range.end_byte);
+
+	      /* if (!parser->need_reparse) */
+	      /* 	{ */
+	      /* 	  eassert (BUF_BEGV_BYTE (buf) <= range.start_byte + parser->visible_beg); */
+	      /* 	  eassert (range.end_byte + parser->visible_beg <= BUF_ZV_BYTE (buf)); */
+	      /* 	} */
+	    }
+	  printf ("\n");
+	}
+    }
+  printf ("}\n\n");
+}
+
+
+/*** Loading language library  */
+
+/* Translate a symbol treesit-<lang> to a C name treesit_<lang>.  */
 static void
 treesit_symbol_to_c_name (char *symbol_name)
 {
@@ -554,14 +604,29 @@ treesit_load_language_push_for_each_suffix (Lisp_Object lib_base_name,
       Lisp_Object candidate1 = concat2 (lib_base_name, XCAR (suffixes));
 #ifndef WINDOWSNT
       /* On Posix hosts, support libraries named with ABI version
-         numbers.  In the foreseeable future we only need to support
-         version 0.0.  For more details, see
+         numbers.  Originally tree-sitter grammars are always versioned
+         at 0.0, so we first try that.  For more details, see
          https://lists.gnu.org/archive/html/emacs-devel/2023-04/msg00386.html.  */
       Lisp_Object candidate2 = concat2 (candidate1, Vtreesit_str_dot_0);
       Lisp_Object candidate3 = concat2 (candidate2, Vtreesit_str_dot_0);
 
       *path_candidates = Fcons (candidate3, *path_candidates);
       *path_candidates = Fcons (candidate2, *path_candidates);
+
+      /* Since 2025, tree-sitter grammars use their supported
+         TREE_SITTER_LANGUAGE_VERSION as the major version.  So we need
+         to try all the version supported by the tree-sitter library
+         too.  (See bug#78754)  */
+      for (int version = TREE_SITTER_MIN_COMPATIBLE_LANGUAGE_VERSION;
+	   version <= TREE_SITTER_LANGUAGE_VERSION;
+	   version++)
+	{
+	  char ext[16]; // 16 should be enough until the end of universe.
+	  snprintf ((char *) &ext, 16, ".%d.0", version);
+	  Lisp_Object versioned_candidate = concat2 (candidate1,
+						     build_string (ext));
+	  *path_candidates = Fcons (versioned_candidate, *path_candidates);
+	}
 #endif
       *path_candidates = Fcons (candidate1, *path_candidates);
     }
@@ -758,7 +823,7 @@ Return nil if a grammar library for LANGUAGE is not available.  */)
 }
 
 
-/*** Parsing functions */
+/*** Parsing functions  */
 
 static void
 treesit_check_parser (Lisp_Object obj)
@@ -846,7 +911,6 @@ treesit_record_change (ptrdiff_t start_byte, ptrdiff_t old_end_byte,
 	  treesit_tree_edit_1 (tree, start_offset, old_end_offset,
 			       new_end_offset);
 	  XTS_PARSER (lisp_parser)->need_reparse = true;
-	  XTS_PARSER (lisp_parser)->timestamp++;
 
 	  /* VISIBLE_BEG/END records tree-sitter's range of view in
 	     the buffer.  We need to adjust them when tree-sitter's
@@ -874,7 +938,10 @@ treesit_record_change (ptrdiff_t start_byte, ptrdiff_t old_end_byte,
     }
 }
 
-/* Comment (ref:visible-beg-null) The purpose of visible_beg/end is to
+static TSRange *treesit_make_ts_ranges (Lisp_Object, Lisp_Object,
+					uint32_t *);
+
+/* Comment (ref:visible-beg-null)  The purpose of visible_beg/end is to
    keep track of "which part of the buffer does the tree-sitter tree
    see", in order to update the tree correctly.  Visible_beg/end have
    two purposes: they "clip" buffer changes within them, and they
@@ -948,10 +1015,7 @@ treesit_sync_visible_region (Lisp_Object parser)
      this function is called), we need to reparse.  */
   if (visible_beg != BUF_BEGV_BYTE (buffer)
       || visible_end != BUF_ZV_BYTE (buffer))
-    {
-      XTS_PARSER (parser)->need_reparse = true;
-      XTS_PARSER (parser)->timestamp++;
-    }
+    XTS_PARSER (parser)->need_reparse = true;
 
   /* Before we parse or set ranges, catch up with the narrowing
      situation.  We change visible_beg and visible_end to match
@@ -1003,7 +1067,91 @@ treesit_sync_visible_region (Lisp_Object parser)
 
   XTS_PARSER (parser)->visible_beg = visible_beg;
   XTS_PARSER (parser)->visible_end = visible_end;
+
+  /* Fix ranges so that the ranges stays with in visible_end.  Here we
+     try to do minimal work so that the ranges is minimally correct and
+     there's no OOB error.  Usually treesit-update-ranges should update
+     the parser with semantically correct ranges.
+
+     We start with the charpos ranges, because for bytepos ranges, after
+     user edits, the ranges start/end might end up inside a multibyte
+     char!  See (ref:bytepos-range-pitfall) below.  */
+  Lisp_Object lisp_ranges = XTS_PARSER (parser)->last_set_ranges;
+  if (NILP (lisp_ranges)) return;
+
+  Lisp_Object new_ranges_head = lisp_ranges;
+  Lisp_Object prev_cons = Qnil;
+
+  FOR_EACH_TAIL_SAFE (lisp_ranges)
+  {
+    Lisp_Object range = XCAR (lisp_ranges);
+    ptrdiff_t beg = XFIXNUM (XCAR (range));
+    ptrdiff_t end = XFIXNUM (XCDR (range));
+
+    if (end <= BUF_BEGV (buffer))
+      /* Even the end is before BUF_BEGV (buffer), discard this range.  */
+      new_ranges_head = XCDR (new_ranges_head);
+    else if (beg >= BUF_ZV (buffer))
+      {
+	/* Even the beg is after BUF_ZV (buffer), discard this range and all
+           the ranges after it.  */
+	if (NILP (prev_cons))
+	  new_ranges_head = Qnil;
+	else
+	  XSETCDR (prev_cons, Qnil);
+	break;
+      }
+    else
+      {
+	/* At this point, the range overlaps with the visible portion of
+	   the buffer in some way (in front / in back / completely
+	   encased / completely encases).  */
+	if (beg < BUF_BEGV (buffer))
+	  XSETCAR (range, make_fixnum (BUF_BEGV (buffer)));
+	if (end > BUF_ZV (buffer))
+	  XSETCDR (range, make_fixnum (BUF_ZV (buffer)));
+      }
+    prev_cons = lisp_ranges;
+  }
+
+  /* We are in a weird situation here: none of the previous ranges
+     overlaps with the new visible region.  We don't have any good
+     options, so just throw the towel: just give the parser a zero
+     range.  (Perfect filling!!)   */
+  if (NILP (new_ranges_head))
+    new_ranges_head = Fcons (Fcons (make_fixnum (BUF_BEGV (buffer)),
+				    make_fixnum (BUF_BEGV (buffer))),
+			     Qnil);
+
+  XTS_PARSER (parser)->last_set_ranges = new_ranges_head;
+
+  uint32_t len = 0;
+  TSRange *ts_ranges = NULL;
+  ts_ranges = treesit_make_ts_ranges (new_ranges_head, parser,
+				      &len);
+  bool success;
+  success = ts_parser_set_included_ranges (XTS_PARSER (parser)->parser,
+					   ts_ranges, len);
+  xfree (ts_ranges);
+  eassert (success);
 }
+
+/* (ref:bytepos-range-pitfall) Suppose we have the following buffer
+   content ([ ] is a unibyte char, [    ] is a multibyte char):
+
+       [a][b][c][d][e][ f  ]
+
+   and the following ranges (denoted by braces):
+
+       [a][b][c][d][e][ f  ]
+       {       }{    }
+
+   So far so good, now user deletes a unibyte char at the beginning:
+
+       [b][c][d][e][ f  ]
+       {       }{    }
+
+   Oops, now our range cuts into the multibyte char, bad!  */
 
 static void
 treesit_check_buffer_size (struct buffer *buffer)
@@ -1015,10 +1163,12 @@ treesit_check_buffer_size (struct buffer *buffer)
 	      make_fixnum (buffer_size_bytes));
 }
 
-static Lisp_Object treesit_make_ranges (const TSRange *, uint32_t, struct buffer *);
+static Lisp_Object treesit_make_ranges (const TSRange *, uint32_t,
+					Lisp_Object, struct buffer *);
 
-static Lisp_Object
-treesit_get_changed_ranges (TSTree *old_tree, TSTree *new_tree, Lisp_Object parser)
+static void
+treesit_call_after_change_functions (TSTree *old_tree, TSTree *new_tree,
+				     Lisp_Object parser)
 {
   /* If the old_tree is NULL, meaning this is the first parse, the
      changed range is the whole buffer.  */
@@ -1028,7 +1178,7 @@ treesit_get_changed_ranges (TSTree *old_tree, TSTree *new_tree, Lisp_Object pars
     {
       uint32_t len;
       TSRange *ranges = ts_tree_get_changed_ranges (old_tree, new_tree, &len);
-      lisp_ranges = treesit_make_ranges (ranges, len, buf);
+      lisp_ranges = treesit_make_ranges (ranges, len, parser, buf);
       xfree (ranges);
     }
   else
@@ -1038,13 +1188,7 @@ treesit_get_changed_ranges (TSTree *old_tree, TSTree *new_tree, Lisp_Object pars
       lisp_ranges = Fcons (Fcons (Fpoint_min (), Fpoint_max ()), Qnil);
       set_buffer_internal (oldbuf);
     }
-  return lisp_ranges;
-}
 
-static void
-treesit_call_after_change_functions (Lisp_Object lisp_ranges,
-				     Lisp_Object parser)
-{
   specpdl_ref count = SPECPDL_INDEX ();
 
   /* let's trust the after change functions and not clone a new ranges
@@ -1061,6 +1205,9 @@ treesit_call_after_change_functions (Lisp_Object lisp_ranges,
 static void
 treesit_ensure_parsed (Lisp_Object parser)
 {
+  if (XTS_PARSER (parser)->within_reparse) return;
+  XTS_PARSER (parser)->within_reparse = true;
+
   struct buffer *buffer = XBUFFER (XTS_PARSER (parser)->buffer);
 
   /* Before we parse, catch up with the narrowing situation.  */
@@ -1069,10 +1216,11 @@ treesit_ensure_parsed (Lisp_Object parser)
      because it might set the flag to true.  */
   treesit_sync_visible_region (parser);
 
-  /* Make sure this comes before everything else, see comment
-     (ref:notifier-inside-ensure-parsed) for more detail.  */
   if (!XTS_PARSER (parser)->need_reparse)
-    return;
+    {
+      XTS_PARSER (parser)->within_reparse = false;
+      return;
+    }
 
   TSParser *treesit_parser = XTS_PARSER (parser)->parser;
   TSTree *tree = XTS_PARSER (parser)->tree;
@@ -1095,19 +1243,12 @@ treesit_ensure_parsed (Lisp_Object parser)
 
   XTS_PARSER (parser)->tree = new_tree;
   XTS_PARSER (parser)->need_reparse = false;
+  XTS_PARSER (parser)->timestamp++;
 
-  Lisp_Object changed_ranges;
-  changed_ranges = treesit_get_changed_ranges (tree, new_tree, parser);
-  XTS_PARSER (parser)->last_changed_ranges = changed_ranges;
-
-  /* After-change functions should run at the very end, most crucially
-     after need_reparse is set to false, this way if the function
-     calls some tree-sitter function which invokes
-     treesit_ensure_parsed again, it returns early and do not
-     recursively call the after change functions again.
-     (ref:notifier-inside-ensure-parsed)  */
-  treesit_call_after_change_functions (changed_ranges, parser);
+  treesit_call_after_change_functions (tree, new_tree, parser);
   ts_tree_delete (tree);
+
+  XTS_PARSER (parser)->within_reparse = false;
 }
 
 /* This is the read function provided to tree-sitter to read from a
@@ -1148,7 +1289,12 @@ treesit_read_buffer (void *parser, uint32_t byte_index,
       beg = NULL;
       len = 0;
     }
-  /* Normal case, read a character.  */
+    /* Normal case, read a character.  We can't give tree-sitter the
+       whole buffer range because we move the gap around, realloc the
+       buffer, etc; and there's no way to invalidate the previously
+       given range in tree-sitter.  Move over, benchmark shows there's
+       very little difference between passing a whole chunk vs passing a
+       single char at once.  The only cost is funcall I guess.  */
   else
     {
       beg = (char *) BUF_BYTE_ADDRESS (buffer, byte_pos);
@@ -1162,7 +1308,7 @@ treesit_read_buffer (void *parser, uint32_t byte_index,
 }
 
 
-/*** Functions for parser and node object */
+/*** Functions for parser and node object  */
 
 /* Wrap the parser in a Lisp_Object to be used in the Lisp
    machine.  */
@@ -1180,7 +1326,6 @@ make_treesit_parser (Lisp_Object buffer, TSParser *parser,
   lisp_parser->after_change_functions = Qnil;
   lisp_parser->tag = tag;
   lisp_parser->last_set_ranges = Qnil;
-  lisp_parser->last_changed_ranges = Qnil;
   lisp_parser->buffer = buffer;
   lisp_parser->parser = parser;
   lisp_parser->tree = tree;
@@ -1191,6 +1336,7 @@ make_treesit_parser (Lisp_Object buffer, TSParser *parser,
   lisp_parser->visible_end = BUF_ZV_BYTE (XBUFFER (buffer));
   lisp_parser->timestamp = 0;
   lisp_parser->deleted = false;
+  lisp_parser->within_reparse = false;
   eassert (lisp_parser->visible_beg <= lisp_parser->visible_end);
   return make_lisp_ptr (lisp_parser, Lisp_Vectorlike);
 }
@@ -1238,8 +1384,10 @@ treesit_delete_parser (struct Lisp_TS_Parser *lisp_parser)
 void
 treesit_delete_query (struct Lisp_TS_Query *lisp_query)
 {
-  ts_query_delete (lisp_query->query);
-  ts_query_cursor_delete (lisp_query->cursor);
+  if (lisp_query->query)
+    ts_query_delete (lisp_query->query);
+  if (lisp_query->cursor)
+    ts_query_cursor_delete (lisp_query->cursor);
 }
 
 /* The following function is called from print.c:print_vectorlike.  */
@@ -1428,6 +1576,9 @@ an indirect buffer.  */)
       CHECK_BUFFER (buffer);
       buf = XBUFFER (buffer);
     }
+
+  struct buffer *buffer_given = buf;
+
   if (buf->base_buffer)
     buf = buf->base_buffer;
 
@@ -1462,7 +1613,9 @@ an indirect buffer.  */)
   ts_parser_set_language (parser, lang);
 
   /* Create parser.  */
-  Lisp_Object lisp_parser = make_treesit_parser (Fcurrent_buffer (),
+  Lisp_Object lisp_buf;
+  XSETBUFFER (lisp_buf, buffer_given);
+  Lisp_Object lisp_parser = make_treesit_parser (lisp_buf,
 						 parser, NULL,
 						 language, tag);
 
@@ -1579,7 +1732,7 @@ treesit_parser_live_p (Lisp_Object parser)
 }
 
 
-/*** Parser API */
+/*** Parser API  */
 
 DEFUN ("treesit-parser-root-node",
        Ftreesit_parser_root_node, Streesit_parser_root_node,
@@ -1635,14 +1788,14 @@ treesit_check_range_argument (Lisp_Object ranges)
    convert between tree-sitter buffer offset and buffer position.  */
 static Lisp_Object
 treesit_make_ranges (const TSRange *ranges, uint32_t len,
-		     struct buffer *buffer)
+		     Lisp_Object parser, struct buffer *buffer)
 {
   Lisp_Object list = Qnil;
   for (int idx = 0; idx < len; idx++)
     {
       TSRange range = ranges[idx];
-      uint32_t beg_byte = range.start_byte + BUF_BEGV_BYTE (buffer);
-      uint32_t end_byte = range.end_byte + BUF_BEGV_BYTE (buffer);
+      uint32_t beg_byte = range.start_byte + XTS_PARSER (parser)->visible_beg;
+      uint32_t end_byte = range.end_byte + XTS_PARSER (parser)->visible_beg;
       eassert (BUF_BEGV_BYTE (buffer) <= beg_byte);
       eassert (beg_byte <= end_byte);
       eassert (end_byte <= BUF_ZV_BYTE (buffer));
@@ -1653,6 +1806,48 @@ treesit_make_ranges (const TSRange *ranges, uint32_t len,
       list = Fcons (lisp_range, list);
     }
   return Fnreverse (list);
+}
+
+/* Convert lisp ranges to tree-sitter ranges.  Set LEN to the length of
+   the ranges.  RANGES must be a valid ranges list, (cons of numbers, no
+   overlap, etc).  PARSER must be a parser.  This function doesn't check
+   for types.  Caller must free the returned ranges.  */
+static TSRange *
+treesit_make_ts_ranges (Lisp_Object ranges, Lisp_Object parser, uint32_t *len)
+{
+  ptrdiff_t ranges_len = list_length (ranges);
+  if (ranges_len > UINT32_MAX)
+    xsignal (Qargs_out_of_range, list2 (ranges, Flength (ranges)));
+
+  *len = (uint32_t) ranges_len;
+  TSRange *treesit_ranges = xmalloc (sizeof (TSRange) * ranges_len);
+
+  struct buffer *buffer = XBUFFER (XTS_PARSER (parser)->buffer);
+
+  for (int idx = 0; idx < ranges_len; idx++, ranges = XCDR (ranges))
+  {
+    Lisp_Object range = XCAR (ranges);
+    ptrdiff_t beg_byte = buf_charpos_to_bytepos (buffer,
+						 XFIXNUM (XCAR (range)));
+    ptrdiff_t end_byte = buf_charpos_to_bytepos (buffer,
+						 XFIXNUM (XCDR (range)));
+
+    /* Shouldn't violate assertion since we just checked for
+       buffer size at the beginning of this function.  */
+    eassert (beg_byte - BUF_BEGV_BYTE (buffer) <= UINT32_MAX);
+    eassert (end_byte - BUF_BEGV_BYTE (buffer) <= UINT32_MAX);
+
+    /* We don't care about points, put in dummy values.  */
+    TSRange rg =
+      {
+	{0, 0}, {0, 0},
+	(uint32_t) beg_byte - XTS_PARSER (parser)->visible_beg,
+	(uint32_t) end_byte - XTS_PARSER (parser)->visible_beg
+      };
+    treesit_ranges[idx] = rg;
+  }
+
+  return treesit_ranges;
 }
 
 DEFUN ("treesit-parser-set-included-ranges",
@@ -1688,42 +1883,14 @@ buffer.  */)
   if (NILP (ranges))
     {
       /* If RANGES is nil, make parser to parse the whole document.
-	 To do that we give tree-sitter a 0 length, the range is a
-	 dummy.  */
-      TSRange treesit_range = {{0, 0}, {0, 0}, 0, 0};
+	 To do that we give tree-sitter a 0 length.  */
       success = ts_parser_set_included_ranges (XTS_PARSER (parser)->parser,
-					       &treesit_range , 0);
+					       NULL , 0);
     }
   else
     {
-      /* Set ranges for PARSER.  */
-      if (list_length (ranges) > UINT32_MAX)
-	xsignal (Qargs_out_of_range, list2 (ranges, Flength (ranges)));
-      uint32_t len = (uint32_t) list_length (ranges);
-      TSRange *treesit_ranges = xmalloc (sizeof (TSRange) * len);
-      struct buffer *buffer = XBUFFER (XTS_PARSER (parser)->buffer);
-
-      /* We can use XFIXNUM, XCAR, XCDR freely because we have checked
-	 the input by treesit_check_range_argument.  */
-
-      for (int idx = 0; !NILP (ranges); idx++, ranges = XCDR (ranges))
-	{
-	  Lisp_Object range = XCAR (ranges);
-	  ptrdiff_t beg_byte = buf_charpos_to_bytepos (buffer,
-						       XFIXNUM (XCAR (range)));
-	  ptrdiff_t end_byte = buf_charpos_to_bytepos (buffer,
-						       XFIXNUM (XCDR (range)));
-	  /* Shouldn't violate assertion since we just checked for
-	     buffer size at the beginning of this function.  */
-	  eassert (beg_byte - BUF_BEGV_BYTE (buffer) <= UINT32_MAX);
-	  eassert (end_byte - BUF_BEGV_BYTE (buffer) <= UINT32_MAX);
-	  /* We don't care about start and end points, put in dummy
-	     values.  */
-	  TSRange rg = {{0, 0}, {0, 0},
-			(uint32_t) beg_byte - BUF_BEGV_BYTE (buffer),
-			(uint32_t) end_byte - BUF_BEGV_BYTE (buffer)};
-	  treesit_ranges[idx] = rg;
-	}
+      uint32_t len = 0;
+      TSRange *treesit_ranges = treesit_make_ts_ranges (ranges, parser, &len);
       success = ts_parser_set_included_ranges (XTS_PARSER (parser)->parser,
 					       treesit_ranges, len);
       xfree (treesit_ranges);
@@ -1735,7 +1902,6 @@ buffer.  */)
 	      ranges);
 
   XTS_PARSER (parser)->need_reparse = true;
-  XTS_PARSER (parser)->timestamp++;
   return Qnil;
 }
 
@@ -1751,25 +1917,9 @@ See also `treesit-parser-set-included-ranges'.  */)
   treesit_check_parser (parser);
   treesit_initialize ();
 
-  /* When the parser doesn't have a range set and we call
-     ts_parser_included_ranges on it, it doesn't return an empty list,
-     but rather return DEFAULT_RANGE. (A single range where start_byte
-     = 0, end_byte = UINT32_MAX).  So we need to track whether the
-     parser is ranged ourselves.  */
-  if (NILP (XTS_PARSER (parser)->last_set_ranges))
-    return Qnil;
-
-  uint32_t len;
-  const TSRange *ranges
-    = ts_parser_included_ranges (XTS_PARSER (parser)->parser, &len);
-
-  /* Our return value depends on the buffer state (BUF_BEGV_BYTE,
-     etc), so we need to sync up.  */
-  treesit_check_buffer_size (XBUFFER (XTS_PARSER (parser)->buffer));
   treesit_sync_visible_region (parser);
 
-  struct buffer *buffer = XBUFFER (XTS_PARSER (parser)->buffer);
-  return treesit_make_ranges (ranges, len, buffer);
+  return XTS_PARSER (parser)->last_set_ranges;
 }
 
 DEFUN ("treesit-parser-notifiers", Ftreesit_parser_notifiers,
@@ -1828,32 +1978,6 @@ positions.  PARSER is the parser issuing the notification.   */)
   return Qnil;
 }
 
-DEFUN ("treesit-parser-changed-ranges", Ftreesit_parser_changed_ranges,
-       Streesit_parser_changed_ranges,
-       1, 2, 0,
-       doc: /* Return the buffer regions affected by the last reparse of PARSER.
-
-Returns a list of cons cells (BEG . END), where each cons cell represents
-a region in which changes in buffer contents affected the last reparse.
-
-This function should almost always be called immediately after
-reparsing.  If it's called when there are new buffer edits that hasn't
-been reparsed, Emacs signals the `treesit-unparsed-edits' error, unless
-optional argument QUIET is non-nil.
-
-Calling this function multiple times consecutively doesn't change its
-return value; it always returns the ranges affected by the last
-reparse.  */)
-  (Lisp_Object parser, Lisp_Object quiet)
-{
-  treesit_check_parser (parser);
-
-  if (XTS_PARSER (parser)->need_reparse && NILP (quiet))
-    xsignal1 (Qtreesit_unparsed_edits, parser);
-
-  return XTS_PARSER (parser)->last_changed_ranges;
-}
-
 
 /*** Node API  */
 
@@ -1873,10 +1997,17 @@ treesit_check_node (Lisp_Object obj)
   CHECK_TS_NODE (obj);
   if (!treesit_node_uptodate_p (obj))
     xsignal1 (Qtreesit_node_outdated, obj);
+
+  /* Technically a lot of node functions can work without the
+     associated buffer being alive, but I doubt there're any real
+     use-cases for that; OTOH putting the buffer-liveness check here is
+     simple, clean, and safe.  */
+  if (!treesit_node_buffer_live_p (obj))
+    xsignal1 (Qtreesit_node_buffer_killed, obj);
 }
 
-/* Checks that OBJ is a positive integer and it is within the visible
-   portion of BUF. */
+/* Check that OBJ is a positive integer and it is within the visible
+   portion of BUF.  */
 static void
 treesit_check_position (Lisp_Object obj, struct buffer *buf)
 {
@@ -1893,6 +2024,14 @@ treesit_node_uptodate_p (Lisp_Object obj)
   return XTS_NODE (obj)->timestamp == XTS_PARSER (lisp_parser)->timestamp;
 }
 
+bool
+treesit_node_buffer_live_p (Lisp_Object obj)
+{
+  struct buffer *buffer
+    = XBUFFER (XTS_PARSER (XTS_NODE (obj)->parser)->buffer);
+  return BUFFER_LIVE_P (buffer);
+}
+
 DEFUN ("treesit-node-type",
        Ftreesit_node_type, Streesit_node_type, 1, 1, 0,
        doc: /* Return the NODE's type as a string.
@@ -1904,8 +2043,11 @@ If NODE is nil, return nil.  */)
   treesit_initialize ();
 
   TSNode treesit_node = XTS_NODE (node)->node;
+  /* ts_node_type could return NULL, see source code (tree-sitter can't
+     find the string name of a node type by its id in its node name
+     obarray).  */
   const char *type = ts_node_type (treesit_node);
-  return build_string (type);
+  return type == NULL ? Vtreesit_str_empty : build_string (type);
 }
 
 DEFUN ("treesit-node-start",
@@ -2163,7 +2305,7 @@ nil.  If NODE is nil, return nil.  */)
 DEFUN ("treesit-node-child-by-field-name",
        Ftreesit_node_child_by_field_name,
        Streesit_node_child_by_field_name, 2, 2, 0,
-       doc: /* Return the child of NODE with FIELD-NAME.
+       doc: /* Return the child of NODE with FIELD-NAME (a string).
 Return nil if there is no such child.  If NODE is nil, return nil.  */)
   (Lisp_Object node, Lisp_Object field_name)
 {
@@ -2385,7 +2527,7 @@ produced by tree-sitter.  */)
 }
 
 
-/*** Query functions */
+/*** Query functions  */
 
 /* Convert a Lisp string to its printed representation in the tree-sitter
    query syntax.  */
@@ -2944,11 +3086,10 @@ be completely in the region.
 
 If NODE-ONLY is non-nil, return a list of nodes.
 
-Besides a node, NODE can also be a parser, in which case the root node
-of that parser is used.
-NODE can also be a language symbol, in which case the root node of a
-parser for that language is used.  If such a parser doesn't exist, it
-is created.
+Besides a node, NODE can be a parser, in which case the root node of
+that parser is used.  NODE can also be a language symbol, in which case
+the root node of a parser for that language is used.  If such a parser
+doesn't exist, it is created.
 
 Signal `treesit-query-error' if QUERY is malformed or something else
 goes wrong.  You can use `treesit-query-validate' to validate and debug
@@ -2962,8 +3103,13 @@ the query.  */)
 
   treesit_initialize ();
 
-  /* Resolve NODE into an actual node.  */
+  /* Resolve NODE into an actual node, signals if node not
+     up-to-date.  */
   Lisp_Object lisp_node = treesit_resolve_node (node);
+  /* As of right now, the node returned by treesit_resolve_node always
+     passes treesit_check_node; but it might not be true in the future,
+     so adding the line below just to be safe.  */
+  treesit_check_node (lisp_node);
 
   /* Extract C values from Lisp objects.  */
   TSNode treesit_node = XTS_NODE (lisp_node)->node;
@@ -2991,8 +3137,8 @@ the query.  */)
 				 &signal_symbol, &signal_data))
     xsignal (signal_symbol, signal_data);
 
-  /* WARN: After this point, free TREESIT_QUERY and CURSOR before every
-     signal and return if NEEDS_TO_FREE_QUERY_AND_CURSOR is true.  */
+  /* WARN: After this point, if NEEDS_TO_FREE_QUERY_AND_CURSOR is true,
+     free TREESIT_QUERY and CURSOR before every signal and return.  */
 
   /* Set query range.  */
   if (!NILP (beg) && !NILP (end))
@@ -3019,7 +3165,7 @@ the query.  */)
      test for predicates.  If predicates pass, then all good, if
      predicates don't pass, revert the result back to the result
      before this loop (PREV_RESULT).  (Predicates control the entire
-     match.) This way we don't need to create a list of captures in
+     match.)  This way we don't need to create a list of captures in
      every for loop and nconc it to RESULT every time.  That is indeed
      the initial implementation in which Yoav found nconc being the
      bottleneck (98.4% of the running time spent on nconc).  */
@@ -3097,7 +3243,7 @@ the query.  */)
 }
 
 
-/*** Navigation */
+/*** Navigation  */
 
 static inline void
 treesit_assume_true (bool val)
@@ -3214,7 +3360,7 @@ treesit_traverse_sibling_helper (TSTreeCursor *cursor,
       if (ts_node_eq (first_child, start))
 	return false;
 
-      /* PROBE is always DELTA siblings ahead of CURSOR. */
+      /* PROBE is always DELTA siblings ahead of CURSOR.  */
       TSTreeCursor probe = ts_tree_cursor_copy (cursor);
       /* This is position of PROBE minus position of CURSOR.  */
       ptrdiff_t delta = 0;
@@ -3451,6 +3597,10 @@ treesit_traverse_match_predicate (TSTreeCursor *cursor, Lisp_Object pred,
   if (STRINGP (pred))
     {
       const char *type = ts_node_type (node);
+      /* ts_node_type returning NULL means something unexpected happend
+         in tree-sitter, in this case the only reasonable thing is to
+         not match anything.  */
+      if (type == NULL) return false;
       return fast_c_string_match (pred, type, strlen (type)) >= 0;
     }
   else if (FUNCTIONP (pred))
@@ -3488,6 +3638,10 @@ treesit_traverse_match_predicate (TSTreeCursor *cursor, Lisp_Object pred,
 	{
 	  /* A bit of code duplication here, but should be fine.  */
 	  const char *type = ts_node_type (node);
+	  /* ts_node_type returning NULL means something unexpected
+             happend in tree-sitter, in this case the only reasonable
+             thing is to not match anything  */
+	  if (type == NULL) return false;
 	  if (!(fast_c_string_match (car, type, strlen (type)) >= 0))
 	    return false;
 
@@ -3498,7 +3652,7 @@ treesit_traverse_match_predicate (TSTreeCursor *cursor, Lisp_Object pred,
 	  return true;
 	}
     }
-  /* Returning false is better than UB. */
+  /* Returning false is better than UB.  */
   return false;
 }
 
@@ -3893,7 +4047,8 @@ PREDICATE can be a symbol representing a thing in
 `treesit-thing-settings', or a predicate, like regexp matching node
 type, etc.  See `treesit-thing-settings' for more details.
 
-Return non-nil if NODE matches PREDICATE, nil otherwise.
+Return non-nil if NODE matches PREDICATE, nil otherwise.  If NODE is
+nil, return nil.
 
 Signals `treesit-invalid-predicate' if there's no definition of THING
 in `treesit-thing-settings', or if PREDICATE is malformed.  If
@@ -3901,6 +4056,8 @@ IGNORE-MISSING is non-nil, don't signal an error for missing THING
 definition, but still signal for malformed PREDICATE.  */)
   (Lisp_Object node, Lisp_Object predicate, Lisp_Object ignore_missing)
 {
+  if (NILP (node)) return Qnil;
+
   CHECK_TS_NODE (node);
 
   Lisp_Object parser = XTS_NODE (node)->parser;
@@ -4011,7 +4168,7 @@ DEFUN ("treesit-available-p", Ftreesit_available_p,
 }
 
 
-/*** Initialization */
+/*** Initialization  */
 
 /* Initialize the tree-sitter routines.  */
 void
@@ -4046,13 +4203,14 @@ syms_of_treesit (void)
   DEFSYM (Qtreesit_query_error, "treesit-query-error");
   DEFSYM (Qtreesit_parse_error, "treesit-parse-error");
   DEFSYM (Qtreesit_range_invalid, "treesit-range-invalid");
-  DEFSYM (Qtreesit_unparsed_edits, "treesit-unparsed_edits");
   DEFSYM (Qtreesit_buffer_too_large,
 	  "treesit-buffer-too-large");
   DEFSYM (Qtreesit_load_language_error,
 	  "treesit-load-language-error");
   DEFSYM (Qtreesit_node_outdated,
 	  "treesit-node-outdated");
+  DEFSYM (Qtreesit_node_buffer_killed,
+	  "treesit-node-buffer-killed");
   DEFSYM (Quser_emacs_directory,
 	  "user-emacs-directory");
   DEFSYM (Qtreesit_parser_deleted, "treesit-parser-deleted");
@@ -4075,8 +4233,6 @@ syms_of_treesit (void)
   define_error (Qtreesit_range_invalid,
 		"RANGES are invalid: they have to be ordered and should not overlap",
 		Qtreesit_error);
-  define_error (Qtreesit_unparsed_edits, "There are unparsed edits in the buffer",
-		Qtreesit_error);
   define_error (Qtreesit_buffer_too_large, "Buffer too large (> 4GiB)",
 		Qtreesit_error);
   define_error (Qtreesit_load_language_error,
@@ -4084,6 +4240,9 @@ syms_of_treesit (void)
 		Qtreesit_error);
   define_error (Qtreesit_node_outdated,
 		"This node is outdated, please retrieve a new one",
+		Qtreesit_error);
+  define_error (Qtreesit_node_buffer_killed,
+		"The buffer associated with this node is killed",
 		Qtreesit_error);
   define_error (Qtreesit_parser_deleted,
 		"This parser is deleted and cannot be used",
@@ -4187,6 +4346,8 @@ the symbol of that THING.  For example, (or sexp sentence).  */);
   Vtreesit_str_match = build_pure_c_string ("match");
   staticpro (&Vtreesit_str_pred);
   Vtreesit_str_pred = build_pure_c_string ("pred");
+  staticpro (&Vtreesit_str_empty);
+  Vtreesit_str_empty = build_pure_c_string ("");
 
   defsubr (&Streesit_language_available_p);
   defsubr (&Streesit_library_abi_version);
@@ -4217,8 +4378,6 @@ the symbol of that THING.  For example, (or sexp sentence).  */);
   defsubr (&Streesit_parser_add_notifier);
   defsubr (&Streesit_parser_remove_notifier);
 
-  defsubr (&Streesit_parser_changed_ranges);
-
   defsubr (&Streesit_node_type);
   defsubr (&Streesit_node_start);
   defsubr (&Streesit_node_end);
@@ -4247,4 +4406,15 @@ the symbol of that THING.  For example, (or sexp sentence).  */);
   defsubr (&Streesit_subtree_stat);
 #endif /* HAVE_TREE_SITTER */
   defsubr (&Streesit_available_p);
+#ifdef HAVE_NTGUI
+  DEFSYM (Qtree_sitter__library_abi, "tree-sitter--library-abi");
+  Fset (Qtree_sitter__library_abi,
+#if HAVE_TREE_SITTER
+	make_fixnum (TREE_SITTER_LANGUAGE_VERSION)
+#else
+	make_fixnum (-1)
+#endif
+	);
+#endif
+
 }

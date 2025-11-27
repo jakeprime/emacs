@@ -1,6 +1,6 @@
 ;;; typescript-ts-mode.el --- tree sitter support for TypeScript  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2022-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2022-2025 Free Software Foundation, Inc.
 
 ;; Author     : Theodor Thornhill <theo@thornhill.no>
 ;; Maintainer : Theodor Thornhill <theo@thornhill.no>
@@ -32,11 +32,15 @@
 (eval-when-compile (require 'rx))
 (require 'c-ts-common) ; For comment indent and filling.
 
+(declare-function treesit-node-child "treesit.c")
 (declare-function treesit-node-start "treesit.c")
 (declare-function treesit-node-end "treesit.c")
 (declare-function treesit-parser-create "treesit.c")
 (declare-function treesit-query-capture "treesit.c")
 (declare-function treesit-query-compile "treesit.c")
+(declare-function treesit-node-child-by-field-name "treesit.c")
+(declare-function treesit-node-match-p "treesit.c")
+(declare-function treesit-node-type "treesit.c")
 
 (defcustom typescript-ts-mode-indent-offset 2
   "Number of spaces for each indentation step in `typescript-ts-mode'."
@@ -91,29 +95,42 @@ Check if a node type is available, then return the right indent rules."
      `(((match "<" "jsx_text") parent 0)
        ((parent-is "jsx_text") parent typescript-ts-mode-indent-offset)))))
 
+(defun typescript-ts-mode--anchor-decl (_n parent &rest _)
+  "Return the position after the declaration keyword before PARENT.
+
+This anchor allows aligning variable_declarators in variable and lexical
+declarations, accounting for the length of keyword (var, let, or const)."
+  (let* ((declaration (treesit-parent-until
+                       parent (rx (or "variable" "lexical") "_declaration") t))
+         (decl (treesit-node-child declaration 0)))
+    (+ (treesit-node-start declaration)
+       (- (treesit-node-end decl) (treesit-node-start decl)))))
+
 (defun typescript-ts-mode--indent-rules (language)
   "Rules used for indentation.
 Argument LANGUAGE is either `typescript' or `tsx'."
   `((,language
      ((parent-is "program") column-0 0)
-     ((node-is "}") parent-bol 0)
+     ((node-is "}") standalone-parent 0)
      ((node-is ")") parent-bol 0)
      ((node-is "]") parent-bol 0)
      ((node-is ">") parent-bol 0)
      ((and (parent-is "comment") c-ts-common-looking-at-star)
       c-ts-common-comment-start-after-first-star -1)
      ((parent-is "comment") prev-adaptive-prefix 0)
-     ((parent-is "ternary_expression") parent-bol typescript-ts-mode-indent-offset)
+     ((parent-is "ternary_expression") standalone-parent typescript-ts-mode-indent-offset)
      ((parent-is "member_expression") parent-bol typescript-ts-mode-indent-offset)
      ((parent-is "named_imports") parent-bol typescript-ts-mode-indent-offset)
-     ((parent-is "statement_block") parent-bol typescript-ts-mode-indent-offset)
+     ((parent-is "statement_block") standalone-parent typescript-ts-mode-indent-offset)
      ((or (node-is "case")
           (node-is "default"))
       parent-bol typescript-ts-mode-indent-offset)
      ((parent-is "switch_case") parent-bol typescript-ts-mode-indent-offset)
      ((parent-is "switch_default") parent-bol typescript-ts-mode-indent-offset)
      ((parent-is "type_arguments") parent-bol typescript-ts-mode-indent-offset)
-     ((parent-is "variable_declarator") parent-bol typescript-ts-mode-indent-offset)
+     ((parent-is "type_parameters") parent-bol typescript-ts-mode-indent-offset)
+     ((parent-is ,(rx (or "variable" "lexical") "_" (or "declaration" "declarator")))
+      parent-bol typescript-ts-mode-indent-offset)
      ((parent-is "arguments") parent-bol typescript-ts-mode-indent-offset)
      ((parent-is "array") parent-bol typescript-ts-mode-indent-offset)
      ((parent-is "formal_parameters") parent-bol typescript-ts-mode-indent-offset)
@@ -438,6 +455,27 @@ See `treesit-thing-settings' for more information.")
   "Nodes that designate sexps in TypeScript.
 See `treesit-thing-settings' for more information.")
 
+(defvar typescript-ts-mode--defun-type-regexp
+  (rx bos (or "internal_module"
+              "interface_declaration"
+              "class_declaration"
+              "method_definition"
+              "function_declaration"
+              "lexical_declaration")
+      eos)
+  "Settings for `treesit-defun-type-regexp'.")
+
+(defun typescript-ts-mode--defun-predicate (node)
+  "Check if NODE is a defun."
+  (pcase (treesit-node-type node)
+    ("lexical_declaration"
+     (treesit-node-match-p
+      (treesit-node-child-by-field-name
+       (treesit-node-child node 0 'named)
+       "value")
+      "arrow_function"))
+    (_ t)))
+
 ;;;###autoload
 (define-derived-mode typescript-ts-base-mode prog-mode "TypeScript"
   "Generic major mode for editing TypeScript.
@@ -448,7 +486,6 @@ This mode is intended to be inherited by concrete major modes."
 
   ;; Comments.
   (c-ts-common-comment-setup)
-  (setq-local treesit-defun-prefer-top-level t)
 
   ;; Electric
   (setq-local electric-indent-chars
@@ -457,10 +494,8 @@ This mode is intended to be inherited by concrete major modes."
 	      '((?\; . after) (?\{ . after) (?\} . before)))
   ;; Navigation.
   (setq-local treesit-defun-type-regexp
-              (regexp-opt '("class_declaration"
-                            "method_definition"
-                            "function_declaration"
-                            "lexical_declaration")))
+              (cons typescript-ts-mode--defun-type-regexp
+                    #'typescript-ts-mode--defun-predicate))
   (setq-local treesit-defun-name-function #'js--treesit-defun-name)
 
   (setq-local treesit-thing-settings
@@ -551,7 +586,9 @@ at least 3 (which is the default value)."
                    (sentence ,(regexp-opt
                                (append typescript-ts-mode--sentence-nodes
                                        '("jsx_element"
-                                         "jsx_self_closing_element")))))))
+                                         "jsx_self_closing_element"))))
+                   (text ,(regexp-opt '("comment"
+                                        "template_string"))))))
 
     ;; Font-lock.
     (setq-local treesit-font-lock-settings

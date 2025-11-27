@@ -1,6 +1,6 @@
 /* Basic character set support.
 
-Copyright (C) 2001-2024 Free Software Foundation, Inc.
+Copyright (C) 2001-2025 Free Software Foundation, Inc.
 
 Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
   2005, 2006, 2007, 2008, 2009, 2010, 2011
@@ -101,7 +101,7 @@ Lisp_Object Vemacs_mule_charset_list;
 int emacs_mule_charset[256];
 
 /* Mapping table from ISO2022's charset (specified by DIMENSION,
-   CHARS, and FINAL-CHAR) to Emacs' charset.  */
+   CHARS, and FINAL-CHAR) to Emacs's charset.  */
 int iso_charset_table[ISO_MAX_DIMENSION][ISO_MAX_CHARS][ISO_MAX_FINAL];
 
 #define CODE_POINT_TO_INDEX(charset, code)				\

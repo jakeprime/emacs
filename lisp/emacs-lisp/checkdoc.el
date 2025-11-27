@@ -1,6 +1,6 @@
 ;;; checkdoc.el --- check documentation strings for style requirements  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1997-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1997-2025 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 ;; Old-Version: 0.6.2
@@ -262,14 +262,15 @@ with these words enabled."
 ;;;###autoload(put 'checkdoc-ispell-list-words 'safe-local-variable #'list-of-strings-p)
 
 (defcustom checkdoc-max-keyref-before-warn nil
-  "If non-nil, number of \\\\=[command-to-keystroke] tokens allowed in a doc string.
-Any more than this and a warning is generated suggesting that the construct
-\\\\={mapvar} be used instead.  If the value is nil, never warn.
+  "Maximum number of \\\\=[command-to-keystroke] tokens allowed in a doc string.
 
-It used to not be practical to use `\\\\=[...]' very many times,
-because display of the documentation string would become slow.
-This is not an issue on modern machines, unless you have
-thousands of substitutions."
+Any more than this and a warning is generated suggesting that the
+construct \\\\={mapvar} be used instead.  If the value is nil, never
+warn.
+
+It used to be impractical to use `\\\\=[...]' very many times, because
+display of the documentation string would become slow.  This is not an
+issue on modern machines, unless you have thousands of substitutions."
   :type '(choice (const nil)
                  integer)
   :version "28.1")
@@ -483,10 +484,10 @@ this to anything but t is likely to be counter-productive.")
     ("yanks" . "yank")
     )
   "Alist of common words in the wrong voice and what should be used instead.
-Set `checkdoc-verb-check-experimental-flag' to nil to avoid this costly
-and experimental check.  Do not modify this list without setting
-the value of `checkdoc-common-verbs-regexp' to nil which cause it to
-be re-created.")
+Set `checkdoc-verb-check-experimental-flag' to a non-nil value to enable
+this experimental check.  Do not modify this list without setting the
+value of `checkdoc-common-verbs-regexp' to nil, which causes it to be
+re-created.")
 
 (defvar checkdoc-syntax-table
   (let ((st (make-syntax-table emacs-lisp-mode-syntax-table)))
@@ -985,7 +986,7 @@ buffer and save warnings in a separate buffer."
 Return nil if there are no more doc strings."
   (let (found)
     (while (and (not (setq found (checkdoc--next-docstring)))
-                (beginning-of-defun -1)))
+                (beginning-of-defun-raw -1)))
     found))
 
 (defun checkdoc--next-docstring ()

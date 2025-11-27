@@ -1,6 +1,6 @@
 /* Functions for image support on window system.
 
-Copyright (C) 1989-2024 Free Software Foundation, Inc.
+Copyright (C) 1989-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -130,6 +130,12 @@ typedef struct w32_bitmap_record Bitmap_Record;
 #define PIX_MASK_RETAIN	0
 #define PIX_MASK_DRAW	1
 
+#define XBM_BIT_SHUFFLE(b) (~(b))
+
+#else
+
+#define XBM_BIT_SHUFFLE(b) (b)
+
 #endif /* HAVE_NTGUI */
 
 #ifdef HAVE_NS
@@ -212,6 +218,11 @@ static unsigned long lookup_rgb_color (struct frame *f, int r, int g, int b);
 #ifdef COLOR_TABLE_SUPPORT
 static void free_color_table (void);
 static unsigned long *colors_in_color_table (int *n);
+#endif
+
+#ifdef HAVE_NTGUI
+static HBITMAP w32_create_pixmap_from_bitmap_data (int, int, char *);
+
 #endif
 
 #if defined (HAVE_WEBP) || defined (HAVE_GIF)
@@ -596,13 +607,31 @@ image_create_bitmap_from_data (struct frame *f, char *bits,
 #endif /* HAVE_ANDROID && !defined ANDROID_STUBIFY */
 
 #ifdef HAVE_NTGUI
-  Lisp_Object frame UNINIT;	/* The value is not used.  */
-  Emacs_Pixmap bitmap;
-  bitmap = CreateBitmap (width, height,
-			 FRAME_DISPLAY_INFO (XFRAME (frame))->n_planes,
-			 FRAME_DISPLAY_INFO (XFRAME (frame))->n_cbits,
-			 bits);
-  if (! bitmap)
+  Emacs_Pixmap stipple;
+  Emacs_Pixmap bitmap = CreateBitmap (width, height, dpyinfo->n_planes,
+				      dpyinfo->n_cbits, bits);
+
+  /* Convert X bitmap to W32 bitmap.  */
+  /* Windows mono bitmaps are reversed compared with X.  */
+  USE_SAFE_ALLOCA;
+
+  {
+    char *invertedBits;
+    int nbytes = (width + CHAR_BIT - 1) / CHAR_BIT * height, i;
+
+    invertedBits = bits;
+
+    SAFE_NALLOCA (bits, 1, nbytes);
+
+    for (i = 0; i < nbytes; i++)
+      bits[i] = XBM_BIT_SHUFFLE (invertedBits[i]);
+  }
+
+  stipple = w32_create_pixmap_from_bitmap_data (width, height, bits);
+
+  SAFE_FREE ();
+
+  if (!bitmap || !stipple)
     return -1;
 #endif /* HAVE_NTGUI */
 
@@ -681,6 +710,7 @@ image_create_bitmap_from_data (struct frame *f, char *bits,
 
 #ifdef HAVE_NTGUI
   dpyinfo->bitmaps[id - 1].pixmap = bitmap;
+  dpyinfo->bitmaps[id - 1].stipple = stipple;
   dpyinfo->bitmaps[id - 1].hinst = NULL;
   dpyinfo->bitmaps[id - 1].depth = 1;
 #endif /* HAVE_NTGUI */
@@ -699,7 +729,7 @@ typedef int image_fd;
 #endif /* defined HAVE_ANDROID && !defined ANDROID_STUBIFY */
 
 #if defined HAVE_HAIKU || defined HAVE_NS || defined HAVE_PGTK	\
-  || defined HAVE_ANDROID
+  || defined HAVE_ANDROID || defined HAVE_NTGUI
 static char *slurp_file (image_fd, ptrdiff_t *);
 static Lisp_Object image_find_image_fd (Lisp_Object, image_fd *);
 static bool xbm_read_bitmap_data (struct frame *, char *, char *,
@@ -711,10 +741,53 @@ static bool xbm_read_bitmap_data (struct frame *, char *, char *,
 ptrdiff_t
 image_create_bitmap_from_file (struct frame *f, Lisp_Object file)
 {
-#if defined (HAVE_NTGUI)
-  return -1;  /* W32_TODO : bitmap support */
-#else
   Display_Info *dpyinfo = FRAME_DISPLAY_INFO (f);
+
+#ifdef HAVE_NTGUI
+  ptrdiff_t id, size;
+  int width, height, rc;
+  image_fd fd;
+  char *contents, *data;
+  Emacs_Pixmap bitmap;
+
+  if (!STRINGP (image_find_image_fd (file, &fd)))
+    return -1;
+
+  contents = slurp_file (fd, &size);
+
+  if (!contents)
+    return -1;
+
+  rc = xbm_read_bitmap_data (f, contents, contents + size,
+			     &width, &height, &data, 0);
+
+  if (!rc)
+    {
+      xfree (contents);
+      return -1;
+    }
+
+  {
+    /* Windows mono bitmaps are reversed compared with X.  */
+
+    int nbytes, i;
+    nbytes = (width + CHAR_BIT - 1) / CHAR_BIT * height;
+
+    for (i = 0; i < nbytes; i++)
+      data[i] = XBM_BIT_SHUFFLE (data[i]);
+  }
+
+  id = image_allocate_bitmap_record (f);
+  bitmap = w32_create_pixmap_from_bitmap_data (width, height, data);
+
+  dpyinfo->bitmaps[id - 1].height = width;
+  dpyinfo->bitmaps[id - 1].width = height;
+  dpyinfo->bitmaps[id - 1].stipple = bitmap;
+  dpyinfo->bitmaps[id - 1].file = xlispstrdup (file);
+
+  xfree (contents);
+  xfree (data);
+  return id;
 #endif
 
 #ifdef HAVE_NS
@@ -1037,6 +1110,7 @@ free_bitmap_record (Display_Info *dpyinfo, Bitmap_Record *bm)
 
 #ifdef HAVE_NTGUI
   DeleteObject (bm->pixmap);
+  DeleteObject (bm->stipple);
 #endif /* HAVE_NTGUI */
 
 #ifdef HAVE_NS
@@ -1254,11 +1328,11 @@ struct image_type
      image type.  Value is true if SPEC is valid.  */
   bool (*valid_p) (Lisp_Object spec);
 
-  /* Load IMG which is used on frame F from information contained in
-     IMG->spec.  Value is true if successful.  */
+  /* Load IMG which is to be used on frame F from information contained
+     in IMG->spec.  Value is true if successful.  */
   bool (*load_img) (struct frame *f, struct image *img);
 
-  /* Free resources of image IMG which is used on frame F.  */
+  /* Free such resources of image IMG as are used on frame F.  */
   void (*free_img) (struct frame *f, struct image *img);
 
 #ifdef WINDOWSNT
@@ -2121,6 +2195,8 @@ make_image_cache (void)
   c->used = c->refcount = 0;
   c->images = xmalloc (c->size * sizeof *c->images);
   c->buckets = xzalloc (IMAGE_CACHE_BUCKETS_SIZE * sizeof *c->buckets);
+  /* This value should never be encountered.  */
+  c->scaling_col_width = -1;
   return c;
 }
 
@@ -2228,22 +2304,20 @@ void
 free_image_cache (struct frame *f)
 {
   struct image_cache *c = FRAME_IMAGE_CACHE (f);
-  if (c)
-    {
-      ptrdiff_t i;
+  ptrdiff_t i;
 
-      /* Cache should not be referenced by any frame when freed.  */
-      eassert (c->refcount == 0);
+  /* This function assumes the caller already verified that the frame's
+     image cache is non-NULL.  */
+  eassert (c);
+  /* Cache should not be referenced by any frame when freed.  */
+  eassert (c->refcount == 0);
 
-      for (i = 0; i < c->used; ++i)
-	free_image (f, c->images[i]);
-      xfree (c->images);
-      xfree (c->buckets);
-      xfree (c);
-      FRAME_IMAGE_CACHE (f) = NULL;
-    }
+  for (i = 0; i < c->used; ++i)
+    free_image (f, c->images[i]);
+  xfree (c->images);
+  xfree (c->buckets);
+  xfree (c);
 }
-
 
 /* Clear image cache of frame F.  FILTER=t means free all images.
    FILTER=nil means clear only images that haven't been
@@ -2253,7 +2327,7 @@ free_image_cache (struct frame *f)
    If image-cache-eviction-delay is non-nil, this frees images in the cache
    which weren't displayed for at least that many seconds.  */
 
-static void
+void
 clear_image_cache (struct frame *f, Lisp_Object filter)
 {
   struct image_cache *c = FRAME_IMAGE_CACHE (f);
@@ -2596,17 +2670,49 @@ image_get_dimension (struct image *img, Lisp_Object symbol)
   return -1;
 }
 
-/* Compute the desired size of an image with native size WIDTH x HEIGHT.
-   Use IMG to deduce the size.  Store the desired size into
-   *D_WIDTH x *D_HEIGHT.  Store -1 x -1 if the native size is OK.  */
+/* Compute the desired size of an image with native size WIDTH x HEIGHT,
+   which is to be displayed on F.  Use IMG to deduce the size.  Store
+   the desired size into *D_WIDTH x *D_HEIGHT.  Store -1 x -1 if the
+   native size is OK.  */
+
 static void
-compute_image_size (double width, double height,
+compute_image_size (struct frame *f, double width, double height,
 		    struct image *img,
 		    int *d_width, int *d_height)
 {
   double scale = 1;
   Lisp_Object value = image_spec_value (img->spec, QCscale, NULL);
-  if (NUMBERP (value))
+
+  if (EQ (value, Qdefault))
+    {
+      Lisp_Object sval = Vimage_scaling_factor;
+
+      /* Compute the scale from factors specified by the value of
+	 Vimage_scaling_factor.  */
+
+    invalid_value:
+      if (EQ (sval, Qauto))
+	{
+	  /* This is a tag with which callers of `clear_image_cache' can
+	     refer to this image and its likenesses.  */
+	  img->dependencies = Fcons (Qauto, img->dependencies);
+	  scale = (FRAME_COLUMN_WIDTH (f) > 10
+		   ? (FRAME_COLUMN_WIDTH (f) / 10.0f) : 1);
+	}
+      else if (NUMBERP (sval))
+	scale = XFLOATINT (sval);
+      else
+	{
+	  image_error ("Invalid `image-scaling-factor': %s",
+		       Vimage_scaling_factor);
+
+	  /* If Vimage_scaling_factor is set to an invalid value, treat
+	     it as though it were the default.  */
+	  sval = Qauto;
+	  goto invalid_value;
+	}
+    }
+  else if (NUMBERP (value))
     {
       double dval = XFLOATINT (value);
       if (0 <= dval)
@@ -2935,7 +3041,8 @@ image_set_transform (struct frame *f, struct image *img)
     }
   else
 #endif
-    compute_image_size (img->width, img->height, img, &width, &height);
+    compute_image_size (f, img->width, img->height, img, &width,
+			&height);
 
   /* Determine rotation.  */
   double rotation = 0.0;
@@ -3513,7 +3620,10 @@ cache_image (struct frame *f, struct image *img)
   ptrdiff_t i;
 
   if (!c)
-    c = FRAME_IMAGE_CACHE (f) = make_image_cache ();
+    {
+      c = FRAME_IMAGE_CACHE (f) = share_image_cache (f);
+      c->refcount++;
+    }
 
   /* Find a free slot in c->images.  */
   for (i = 0; i < c->used; ++i)
@@ -3776,7 +3886,7 @@ x_create_x_image_and_pixmap (struct frame *f, int width, int height, int depth,
 static void
 x_destroy_x_image (XImage *ximg)
 {
-  if (ximg)
+  if (ximg->data)
     {
       xfree (ximg->data);
       ximg->data = NULL;
@@ -4043,16 +4153,16 @@ image_destroy_x_image (Emacs_Pix_Container pimg)
   eassert (input_blocked_p ());
   if (pimg)
     {
-#ifdef USE_CAIRO
-#endif	/* USE_CAIRO */
+#if defined USE_CAIRO || defined HAVE_HAIKU || defined HAVE_NS
+      /* On these systems, Emacs_Pix_Containers always point to the same
+	 data as pixmaps in `struct image', and therefore must never be
+	 freed separately.  */
+#endif	/* USE_CAIRO || HAVE_HAIKU || HAVE_NS */
 #ifdef HAVE_NTGUI
       /* Data will be freed by DestroyObject.  */
       pimg->data = NULL;
       xfree (pimg);
 #endif /* HAVE_NTGUI */
-#ifdef HAVE_NS
-      ns_release_object (pimg);
-#endif /* HAVE_NS */
     }
 #endif
 }
@@ -4066,7 +4176,7 @@ static void
 gui_put_x_image (struct frame *f, Emacs_Pix_Container pimg,
                  Emacs_Pixmap pixmap, int width, int height)
 {
-#if defined USE_CAIRO || defined HAVE_HAIKU
+#if defined USE_CAIRO || defined HAVE_HAIKU || defined HAVE_NS
   eassert (pimg == pixmap);
 #elif defined HAVE_X_WINDOWS
   GC gc;
@@ -4078,12 +4188,7 @@ gui_put_x_image (struct frame *f, Emacs_Pix_Container pimg,
   XFreeGC (FRAME_X_DISPLAY (f), gc);
 #elif defined HAVE_ANDROID
   android_put_image (pixmap, pimg);
-#endif
-
-#ifdef HAVE_NS
-  eassert (pimg == pixmap);
-  ns_retain_object (pimg);
-#endif
+#endif /* HAVE_ANDROID */
 }
 
 /* Thin wrapper for image_create_x_image_and_pixmap_1, so that it matches
@@ -4800,12 +4905,6 @@ convert_mono_to_color_image (struct frame *f, struct image *img,
     img->pixmap = new_pixmap;
 }
 
-#define XBM_BIT_SHUFFLE(b) (~(b))
-
-#else
-
-#define XBM_BIT_SHUFFLE(b) (b)
-
 #endif /* HAVE_NTGUI */
 
 
@@ -5337,7 +5436,7 @@ static const struct image_keyword xpm_format[XPM_LAST] =
 
 #if defined HAVE_X_WINDOWS && !defined USE_CAIRO
 
-/* Define ALLOC_XPM_COLORS if we can use Emacs' own color allocation
+/* Define ALLOC_XPM_COLORS if we can use Emacs's own color allocation
    functions for allocating image colors.  Our own functions handle
    color allocation failures more gracefully than the ones on the XPM
    lib.  */
@@ -6401,9 +6500,13 @@ xpm_load_image (struct frame *f,
 
  failure:
   image_error ("Invalid XPM3 file (%s)", img->spec);
-  image_destroy_x_image (ximg);
-  image_destroy_x_image (mask_img);
-  image_clear_image (f, img);
+  if (ximg)
+    {
+      image_destroy_x_image (ximg);
+      if (mask_img)
+	image_destroy_x_image (mask_img);
+      image_clear_image (f, img);
+    }
   return 0;
 
 #undef match
@@ -11093,7 +11196,7 @@ imagemagick_load_image (struct frame *f, struct image *img,
   }
 
 #ifndef DONT_CREATE_TRANSFORMED_IMAGEMAGICK_IMAGE
-  compute_image_size (MagickGetImageWidth (image_wand),
+  compute_image_size (f, MagickGetImageWidth (image_wand),
 		      MagickGetImageHeight (image_wand),
 		      img, &desired_width, &desired_height);
 #else
@@ -11552,7 +11655,11 @@ DEF_DLL_FN (void, rsvg_handle_get_dimensions,
 DEF_DLL_FN (gboolean, rsvg_handle_set_stylesheet,
 	    (RsvgHandle *, const guint8 *, gsize, GError **));
 #  endif
+#  if LIBRSVG_CHECK_VERSION (2, 59, 0)
+DEF_DLL_FN (GdkPixbuf *, rsvg_handle_get_pixbuf_and_error, (RsvgHandle *, GError **));
+#  else
 DEF_DLL_FN (GdkPixbuf *, rsvg_handle_get_pixbuf, (RsvgHandle *));
+#  endif
 DEF_DLL_FN (int, gdk_pixbuf_get_width, (const GdkPixbuf *));
 DEF_DLL_FN (int, gdk_pixbuf_get_height, (const GdkPixbuf *));
 DEF_DLL_FN (guchar *, gdk_pixbuf_get_pixels, (const GdkPixbuf *));
@@ -11611,8 +11718,11 @@ init_svg_functions (void)
 #if LIBRSVG_CHECK_VERSION (2, 48, 0)
   LOAD_DLL_FN (library, rsvg_handle_set_stylesheet);
 #endif
+#if LIBRSVG_CHECK_VERSION (2, 59, 0)
+  LOAD_DLL_FN (library, rsvg_handle_get_pixbuf_and_error);
+#else
   LOAD_DLL_FN (library, rsvg_handle_get_pixbuf);
-
+#endif
   LOAD_DLL_FN (gdklib, gdk_pixbuf_get_width);
   LOAD_DLL_FN (gdklib, gdk_pixbuf_get_height);
   LOAD_DLL_FN (gdklib, gdk_pixbuf_get_pixels);
@@ -11657,7 +11767,11 @@ init_svg_functions (void)
 #  if LIBRSVG_CHECK_VERSION (2, 48, 0)
 #   undef rsvg_handle_set_stylesheet
 #  endif
-#  undef rsvg_handle_get_pixbuf
+#  if LIBRSVG_CHECK_VERSION (2, 59, 0)
+#   undef rsvg_handle_get_pixbuf_and_error
+#  else
+#   undef rsvg_handle_get_pixbuf
+#  endif
 #  if LIBRSVG_CHECK_VERSION (2, 32, 0)
 #   undef g_file_new_for_path
 #   undef g_memory_input_stream_new_from_data
@@ -11698,7 +11812,11 @@ init_svg_functions (void)
 #  if LIBRSVG_CHECK_VERSION (2, 48, 0)
 #   define rsvg_handle_set_stylesheet fn_rsvg_handle_set_stylesheet
 #  endif
-#  define rsvg_handle_get_pixbuf fn_rsvg_handle_get_pixbuf
+#  if LIBRSVG_CHECK_VERSION (2, 59, 0)
+#   define rsvg_handle_get_pixbuf_and_error fn_rsvg_handle_get_pixbuf_and_error
+#  else
+#   define rsvg_handle_get_pixbuf fn_rsvg_handle_get_pixbuf
+#  endif
 #  if LIBRSVG_CHECK_VERSION (2, 32, 0)
 #   define g_file_new_for_path fn_g_file_new_for_path
 #   define g_memory_input_stream_new_from_data \
@@ -12066,7 +12184,7 @@ svg_load_image (struct frame *f, struct image *img, char *contents,
 #endif
 
 #ifdef HAVE_NATIVE_TRANSFORMS
-  compute_image_size (viewbox_width, viewbox_height, img,
+  compute_image_size (f, viewbox_width, viewbox_height, img,
                       &width, &height);
 
   width = scale_image_size (width, 1, FRAME_SCALE_FACTOR (f));
@@ -12203,8 +12321,13 @@ svg_load_image (struct frame *f, struct image *img, char *contents,
 
   /* We can now get a valid pixel buffer from the svg file, if all
      went ok.  */
+#if LIBRSVG_CHECK_VERSION (2, 59, 0)
+  pixbuf = rsvg_handle_get_pixbuf_and_error (rsvg_handle, &err);
+  if (err) goto rsvg_error;
+#else
   pixbuf = rsvg_handle_get_pixbuf (rsvg_handle);
   if (!pixbuf) goto rsvg_error;
+#endif
   g_object_unref (rsvg_handle);
   xfree (wrapped_contents);
 
@@ -12809,6 +12932,7 @@ non-numeric, there is no explicit limit on the size of images.  */);
   DEFSYM (Qcount, "count");
   DEFSYM (Qextension_data, "extension-data");
   DEFSYM (Qdelay, "delay");
+  DEFSYM (Qauto, "auto");
 
   /* Keywords.  */
   DEFSYM (QCascent, ":ascent");
@@ -13021,6 +13145,17 @@ The value can also be nil, meaning the cache is never cleared.
 
 The function `clear-image-cache' disregards this variable.  */);
   Vimage_cache_eviction_delay = make_fixnum (300);
+
+  DEFVAR_LISP ("image-scaling-factor", Vimage_scaling_factor,
+    doc: /* When displaying images, apply this scaling factor before displaying.
+This is not supported for all image types, and is mostly useful
+when you have a high-resolution monitor.
+The value is either a floating point number (where numbers higher
+than 1 means to increase the size and lower means to shrink the
+size), or the symbol `auto', which will compute a scaling factor
+based on the font pixel size.  */);
+  Vimage_scaling_factor = Qauto;
+
 #ifdef HAVE_IMAGEMAGICK
   DEFVAR_INT ("imagemagick-render-type", imagemagick_render_type,
     doc: /* Integer indicating which ImageMagick rendering method to use.

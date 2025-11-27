@@ -1,6 +1,6 @@
 ;;; erc-networks-tests.el --- Tests for erc-networks.  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2020-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2020-2025 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 ;;
@@ -133,10 +133,12 @@
     (with-temp-buffer
       (setq erc-networks--id (erc-networks--id-fixed-create 'oldest)
             oldest (current-buffer))
+      (sleep-for 0.02)
 
       (with-temp-buffer
         (setq erc-networks--id (erc-networks--id-fixed-create 'middle)
               middle (current-buffer))
+        (sleep-for 0.02)
 
         (with-temp-buffer
           (setq erc-networks--id (erc-networks--id-fixed-create 'newest)

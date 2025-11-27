@@ -1,6 +1,6 @@
 <!-- @configure_input@
 
-Copyright (C) 2023-2024 Free Software Foundation, Inc.
+Copyright (C) 2023-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -17,17 +17,23 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>. -->
 
-<!-- targetSandboxVersion must be 1.  Otherwise, fascist security
-     restrictions prevent Emacs from making HTTP connections.  -->
+<!-- targetSandboxVersion must be 1, for otherwise fascist security
+     restrictions prevent Emacs from making HTTP connections.
+
+     Furthermore, versionCode should remain constant, rather than increase
+     with each major release, because it is impossible to downgrade an
+     installation with a greater value to an older version of Emacs.  -->
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
 	  package="org.gnu.emacs"
 	  android:targetSandboxVersion="1"
 	  android:installLocation="auto"
 	  android:requestLegacyExternalStorage="true"
+	  android:hasFragileUserData="true"
+	  android:appCategory="productivity"
 	  @ANDROID_SHARED_USER_ID@
 	  @ANDROID_SHARED_USER_NAME@
-	  android:versionCode="@emacs_major_version@"
+	  android:versionCode="30"
 	  android:versionName="@version@">
 
   <!-- Paste in every permission in existence so Emacs can do
@@ -264,6 +270,7 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>. -->
       </intent-filter>
 
       <intent-filter>
+        <action android:name="android.intent.action.SEND"/>
         <action android:name="android.intent.action.SENDTO"/>
         <data android:scheme="mailto"/>
         <category android:name="android.intent.category.DEFAULT"/>
@@ -274,6 +281,7 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>. -->
 	      android:taskAffinity="emacs.secondary_frame"
 	      android:windowSoftInputMode="adjustResize"
 	      android:exported="true"
+	      android:maxRecents="50"
 	      android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|locale|fontScale"/>
 
     <activity android:autoRemoveFromRecents="true"
@@ -286,9 +294,9 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>. -->
       </intent-filter>
     </activity>
 
-    <!-- Android 6 and earlier don't display ``application
-         preferences'' activities in Settings, so display the
-         preferences activity as a launcher icon instead.  -->
+    <!-- Android 6 and earlier don't display ``application preferences''
+         activities in Settings, so display the preferences activity as
+         a launcher icon instead.  -->
 
     <activity android:autoRemoveFromRecents="true"
               android:label="Emacs options"
@@ -330,3 +338,18 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>. -->
 	     android:label="GNU Emacs service"/>
   </application>
 </manifest>
+
+<!-- Auto-incrementing version code.
+
+This comment contains an Android version code
+(https://developer.android.com/studio/publish/versioning#versioningsettings)
+corresponding to the current Emacs version.  The version code in
+AndroidManifest.xml.in is hard-coded to a fixed value to facilitate
+package downgrades.  Some automated systems employed by Android package
+repositories require an incrementing numeric version code to detect
+upgrades, which is provided here and is altered by admin/admin.el.
+Refer to e.g. https://forum.f-droid.org/t/emacs-packaging/30424/25.
+
+Version-code: 300200000
+
+-->

@@ -1,6 +1,6 @@
 ;;; disass.el --- disassembler for compiled Emacs Lisp code  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1986, 1991, 2002-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1986, 1991, 2002-2025 Free Software Foundation, Inc.
 
 ;; Author: Doug Cutting <doug@csli.stanford.edu>
 ;;	Jamie Zawinski <jwz@lucid.com>
@@ -91,8 +91,8 @@ redefine OBJECT if it is a symbol."
 	args)
     (setq obj (autoload-do-load obj name))
     (if (subrp obj)
-        (if (and (fboundp 'subr-native-elisp-p)
-                 (subr-native-elisp-p obj))
+        (if (and (fboundp 'native-comp-function-p)
+                 (native-comp-function-p obj))
             (progn
               (require 'comp)
               (let ((eln (native-comp-unit-file (subr-native-comp-unit obj))))

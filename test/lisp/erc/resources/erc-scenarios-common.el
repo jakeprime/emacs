@@ -1,6 +1,6 @@
 ;;; erc-scenarios-common.el --- Common helpers for ERC scenarios -*- lexical-binding: t -*-
 
-;; Copyright (C) 2022-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2022-2025 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -144,6 +144,7 @@
                          (quit . ,(erc-quit/part-reason-default))
                          (erc-version . ,erc-version)))
       (erc-modules (copy-sequence erc-modules))
+      (debug-on-error t)
       (inhibit-interaction noninteractive)
       (auth-source-do-cache nil)
       (timer-list (copy-sequence timer-list))

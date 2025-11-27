@@ -1,6 +1,6 @@
 ;;; cus-start.el --- define customization properties of builtins  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1997, 1999-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1997, 1999-2025 Free Software Foundation, Inc.
 
 ;; Author: Per Abrahamsen <abraham@dina.kvl.dk>
 ;; Keywords: internal
@@ -361,6 +361,10 @@ Leaving \"Default\" unchecked is equivalent with specifying a default of
 	     ;; fringe.c
 	     (overflow-newline-into-fringe fringe boolean)
 	     ;; image.c
+             (image-scaling-factor image
+                                   (choice number
+                                           (const :tag "Automatically compute" auto))
+                                   "26.1")
 	     (imagemagick-render-type image integer "24.1")
 	     ;; indent.c
 	     (indent-tabs-mode indent boolean)
@@ -904,6 +908,8 @@ since it could result in memory overflow and make Emacs crash."
 		       (fboundp 'x-create-frame))
 		      ((string-match "tab-bar-" (symbol-name symbol))
 		       (fboundp 'x-create-frame))
+                      ((string-match "image-" (symbol-name symbol))
+                       (fboundp 'x-create-frame))
 		      ((equal "vertical-centering-font-regexp"
 			      (symbol-name symbol))
 		       ;; Any function from fontset.c will do.

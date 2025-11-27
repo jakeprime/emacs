@@ -1,6 +1,6 @@
 ;;; browse-url.el --- pass a URL to a web browser  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1995-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1995-2025 Free Software Foundation, Inc.
 
 ;; Author: Denis Howe <dbh@doc.ic.ac.uk>
 ;; Maintainer: emacs-devel@gnu.org
@@ -113,10 +113,10 @@
 
 ;; Use the Emacs Web Wowser (EWW) when not running under X11:
 ;;	(or (eq window-system 'x)
-;;	    (setq browse-url-browser-function #'eww-browse-url))
+;;	    (setopt browse-url-browser-function #'eww-browse-url))
 
 ;; To always save modified buffers before displaying the file in a browser:
-;;	(setq browse-url-save-file t)
+;;	(setopt browse-url-save-file t)
 
 ;; To invoke different browsers/tools for different URLs, customize
 ;; `browse-url-handlers'.  In earlier versions of Emacs, the same
@@ -252,7 +252,7 @@ be used instead."
       "\\)"))
    "\\)")
   "Regular expression that matches URLs."
-  :version "27.1"
+  :version "30.1"
   :type 'regexp)
 
 (defcustom browse-url-browser-display nil
@@ -419,14 +419,14 @@ value converts ange-ftp-style file names into ftp URLs and prepends
 `file:' to any file name beginning with `/'.
 
 For example, adding to the default a specific translation of an ange-ftp
-address to an HTTP URL:
+address to an HTTPS URL:
 
-    (setq browse-url-filename-alist
-	  \\='((\"/webmaster@webserver:/home/www/html/\" .
-             \"https://www.example.org/\")
-            (\"^/\\(ftp@\\|anonymous@\\)?\\([^:/]+\\):/*\" . \"ftp://\\2/\")
-            (\"^/\\([^:@/]+@\\)?\\([^:/]+\\):/*\" . \"ftp://\\1\\2/\")
-	    (\"^/+\" . \"file:/\")))"
+    (setopt browse-url-filename-alist
+            \\='((\"/webmaster@webserver:/home/www/html/\" .
+               \"https://www.example.org/\")
+              (\"^/\\(ftp@\\|anonymous@\\)?\\([^:/]+\\):/*\" . \"ftp://\\2/\")
+              (\"^/\\([^:@/]+@\\)?\\([^:/]+\\):/*\" . \"ftp://\\1\\2/\")
+              (\"^/+\" . \"file:/\")))"
   :type '(repeat (cons :format "%v"
                        (regexp :tag "Regexp")
                        (string :tag "Replacement")))
@@ -1320,7 +1320,7 @@ Default to the URL around or before point."
               'browse-url-browser-kind 'external)
 
 (defcustom browse-url-android-share nil
-  "If non-nil, share URLs instead of opening them.
+  "If non-nil, share URLs on Android systems instead of opening them.
 When non-nil, `browse-url-default-android-browser' will try to
 share the URL being browsed through programs such as mail clients
 and instant messengers instead of opening it in a web browser."

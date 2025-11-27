@@ -1,6 +1,6 @@
 ;;; esh-util-tests.el --- esh-util test suite  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2022-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2022-2025 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -165,10 +165,7 @@
 (ert-deftest esh-util-test/path/get ()
   "Test that getting the Eshell path returns the expected results."
   (let ((expected-path (butlast (exec-path))))
-    (should (equal (eshell-get-path)
-                   (if (eshell-under-windows-p)
-                       (cons "." expected-path)
-                     expected-path)))
+    (should (equal (eshell-get-path) expected-path))
     (should (equal (eshell-get-path 'literal)
                    expected-path))))
 

@@ -1,6 +1,6 @@
 /* MS-DOS specific C utilities.          -*- coding: cp850 -*-
 
-Copyright (C) 1993-1997, 1999-2024 Free Software Foundation, Inc.
+Copyright (C) 1993-1997, 1999-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -599,7 +599,7 @@ dos_set_window_size (int *rows, int *cols)
   *rows = ScreenRows ();
   *cols = ScreenCols ();
 
-  /* Update Emacs' notion of screen dimensions.  */
+  /* Update Emacs's notion of screen dimensions.  */
   screen_size_X = *cols;
   screen_size_Y = *rows;
   screen_size = *cols * *rows;

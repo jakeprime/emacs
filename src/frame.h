@@ -1,5 +1,5 @@
 /* Define frame-object for GNU Emacs.
-   Copyright (C) 1993-1994, 1999-2024 Free Software Foundation, Inc.
+   Copyright (C) 1993-1994, 1999-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -287,6 +287,12 @@ struct frame
 
   /* Cache of realized faces.  */
   struct face_cache *face_cache;
+
+#ifdef HAVE_WINDOW_SYSTEM
+  /* Cache of realized images, which may be shared with other
+     frames.  */
+  struct image_cache *image_cache;
+#endif /* HAVE_WINDOW_SYSTEM */
 
   /* Tab-bar item index of the item on which a mouse button was pressed.  */
   int last_tab_bar_item;
@@ -909,7 +915,7 @@ default_pixels_per_inch_y (void)
 #define FRAME_KBOARD(f) ((f)->terminal->kboard)
 
 /* Return a pointer to the image cache of frame F.  */
-#define FRAME_IMAGE_CACHE(F) ((F)->terminal->image_cache)
+#define FRAME_IMAGE_CACHE(F) ((F)->image_cache)
 
 #define XFRAME(p) \
   (eassert (FRAMEP (p)), XUNTAG (p, Lisp_Vectorlike, struct frame))

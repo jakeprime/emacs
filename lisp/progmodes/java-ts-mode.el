@@ -1,6 +1,6 @@
 ;;; java-ts-mode.el --- tree-sitter support for Java  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2022-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2022-2025 Free Software Foundation, Inc.
 
 ;; Author     : Theodor Thornhill <theo@thornhill.no>
 ;; Maintainer : Theodor Thornhill <theo@thornhill.no>
@@ -37,6 +37,7 @@
 (declare-function treesit-node-type "treesit.c")
 (declare-function treesit-node-child-by-field-name "treesit.c")
 (declare-function treesit-node-child-by-field-name "treesit.c")
+(declare-function treesit-node-end "treesit.c")
 (declare-function treesit-query-capture "treesit.c")
 
 (defcustom java-ts-mode-indent-offset 4
@@ -155,14 +156,31 @@
   "Java operators for tree-sitter font-locking.")
 
 (defun java-ts-mode--string-highlight-helper ()
-"Returns, for strings, a query based on what is supported by
-the available version of Tree-sitter for java."
+  "Return, for strings, a query based on what is supported by
+the available version of Tree-sitter for Java."
   (condition-case nil
       (progn (treesit-query-capture 'java '((text_block) @font-lock-string-face))
 	     `((string_literal) @font-lock-string-face
 	       (text_block) @font-lock-string-face))
     (error
      `((string_literal) @font-lock-string-face))))
+
+(defun java-ts-mode--fontify-constant (node override start end &rest _)
+  "Fontify a Java constant.
+In Java the names of variables declared class constants and of ANSI
+constants should be all uppercase with words separated by underscores.
+This function also prevents annotations from being highlighted as if
+they were constants.
+For NODE, OVERRIDE, START, and END, see `treesit-font-lock-rules'."
+  (let ((node-start (treesit-node-start node))
+	(case-fold-search nil))
+    (when (and
+	   (not (equal (char-before node-start) ?@)) ;; skip annotations
+	   (string-match "\\`[A-Z_][0-9A-Z_]*\\'" (treesit-node-text node)))
+      (treesit-fontify-with-override
+       node-start (treesit-node-end node)
+       'font-lock-constant-face override
+       start end))))
 
 (defvar java-ts-mode--font-lock-settings
   (treesit-font-lock-rules
@@ -174,8 +192,7 @@ the available version of Tree-sitter for java."
    :language 'java
    :override t
    :feature 'constant
-   `(((identifier) @font-lock-constant-face
-      (:match "\\`[A-Z_][0-9A-Z_]*\\'" @font-lock-constant-face))
+   `((identifier) @java-ts-mode--fontify-constant
      [(true) (false)] @font-lock-constant-face)
    :language 'java
    :override t

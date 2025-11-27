@@ -1,6 +1,6 @@
 ;;; lisp-mnt.el --- utility functions for Emacs Lisp maintainers  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1992, 1994, 1997, 2000-2024 Free Software Foundation,
+;; Copyright (C) 1992, 1994, 1997, 2000-2025 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Eric S. Raymond <esr@thyrsus.com>
@@ -71,8 +71,8 @@
 ;; ;;	Eric S. Raymond <esr@thyrsus.com>
 ;;
 ;;    * Maintainer line --- should be a single name/address as in the Author
-;; line, or an address only.  If there is no maintainer
-;; line, the person(s) in the Author field are presumed to be it.
+;; line, or an address only.  If there is no maintainer line, the person(s) in
+;; the Author field are presumed to be it.
 ;;    The idea behind these two fields is to be able to write a Lisp function
 ;; that does "send mail to the author" without having to mine the name out by
 ;; hand.  Please be careful about surrounding the network address with <> if

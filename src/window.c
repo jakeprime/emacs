@@ -1,6 +1,6 @@
 /* Window creation, deletion and examination for GNU Emacs.
    Does not include redisplay.
-   Copyright (C) 1985-1987, 1993-1998, 2000-2024 Free Software
+   Copyright (C) 1985-1987, 1993-1998, 2000-2025 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -4123,6 +4123,9 @@ set_window_buffer (Lisp_Object window, Lisp_Object buffer,
   specpdl_ref count = SPECPDL_INDEX ();
   bool samebuf = EQ (buffer, w->contents);
 
+  /* It's never OK to assign WINDOW a dead buffer.  */
+  eassert (BUFFER_LIVE_P (b));
+
   wset_buffer (w, buffer);
 
   if (EQ (window, selected_window))
@@ -6014,7 +6017,7 @@ window_scroll_pixel_based (Lisp_Object window, int n, bool whole, bool noerror)
 	      /* The last line was only partially visible, make it fully
 		 visible.  */
 	      w->vscroll = (it.last_visible_y
-			    - it.current_y + it.max_ascent + it.max_descent);
+			    - (it.current_y + it.max_ascent + it.max_descent));
 	      adjust_frame_glyphs (it.f);
 	    }
 	  else

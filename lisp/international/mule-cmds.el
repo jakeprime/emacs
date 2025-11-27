@@ -1,6 +1,6 @@
 ;;; mule-cmds.el --- commands for multilingual environment  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1997-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1997-2025 Free Software Foundation, Inc.
 ;; Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
 ;;   2005, 2006, 2007, 2008, 2009, 2010, 2011
 ;;   National Institute of Advanced Industrial Science and Technology (AIST)
@@ -737,7 +737,7 @@ DEFAULT is the coding system to use by default in the query."
 			  (format "string \"%s\"." from)
 			(format-message "buffer `%s'." bufname)))
 	    (insert
-	     "These default coding systems were tried to encode"
+	     "These default coding systems were tried to safely encode"
 	     (if (stringp from)
 		 (concat " \"" (if (> (length from) 10)
 				   (concat (substring from 0 10) "...\"")
@@ -758,9 +758,9 @@ e.g., for sending an email message.\n ")
 	      (insert (if rejected "The other coding systems"
 			"However, each of them")
 		      (substitute-command-keys
-		       " encountered characters it couldn't encode:\n"))
+		       " encountered characters it couldn't encode safely:\n"))
 	      (dolist (coding unsafe)
-		(insert (format "  %s cannot encode these:" (car coding)))
+		(insert (format "  %s cannot safely encode these:" (car coding)))
 		(let ((i 0)
 		      (func1
                        (lambda (bufname pos)
@@ -1676,6 +1676,7 @@ This is a subroutine for `describe-input-method'."
 
 (defun read-multilingual-string (prompt &optional initial-input input-method)
   "Read a multilingual string from minibuffer, prompting with string PROMPT.
+Return the string thus read.
 The input method selected last time is activated in minibuffer.
 If optional second argument INITIAL-INPUT is non-nil, insert it in the
 minibuffer initially.
@@ -3182,6 +3183,13 @@ on encoding."
     (let* ((char (gethash name ucs-names))
            (script (and char (aref char-script-table char))))
       (if script (symbol-name script) "ungrouped"))))
+
+(defun char-to-name (char)
+  "Return the Unicode name for CHAR, if it has one, else nil.
+Return nil if CHAR is not a character."
+  (and (characterp char)
+       (or (get-char-code-property char 'name)
+           (get-char-code-property char 'old-name))))
 
 (defun char-from-name (string &optional ignore-case)
   "Return a character as a number from its Unicode name STRING.

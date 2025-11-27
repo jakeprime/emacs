@@ -1,6 +1,6 @@
 ;;; bookmark.el --- set bookmarks, maybe annotate them, jump to them later -*- lexical-binding: t -*-
 
-;; Copyright (C) 1993-1997, 2001-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1997, 2001-2025 Free Software Foundation, Inc.
 
 ;; Author: Karl Fogel <kfogel@red-bean.com>
 ;; Created: July, 1993
@@ -1265,10 +1265,12 @@ After calling DISPLAY-FUNCTION, set window point to the point specified
 by BOOKMARK-NAME-OR-RECORD, if necessary, run `bookmark-after-jump-hook',
 and then show any annotations for this bookmark."
   (bookmark-handle-bookmark bookmark-name-or-record)
-  (save-current-buffer
-    (funcall display-function (current-buffer)))
-  (let ((win (get-buffer-window (current-buffer) 0)))
-    (if win (set-window-point win (point))))
+  ;; Store `point' now, because `display-function' might change it.
+  (let ((point (point)))
+    (save-current-buffer
+      (funcall display-function (current-buffer)))
+    (let ((win (get-buffer-window (current-buffer) 0)))
+      (if win (set-window-point win point))))
   ;; FIXME: we used to only run bookmark-after-jump-hook in
   ;; `bookmark-jump' itself, but in none of the other commands.
   (when bookmark-fringe-mark
@@ -1582,6 +1584,8 @@ confirmation."
   (when (or no-confirm
             (yes-or-no-p "Permanently delete all bookmarks? "))
     (bookmark-maybe-load-default-file)
+    (dolist (bm bookmark-alist)
+      (bookmark--remove-fringe-mark bm))
     (setq bookmark-alist-modification-count
           (+ bookmark-alist-modification-count (length bookmark-alist)))
     (setq bookmark-alist nil)
@@ -1676,7 +1680,8 @@ for a file, defaulting to the file defined by variable
 	;; Rather than a single call to `pp' we make one per bookmark.
 	;; Apparently `pp' has a poor algorithmic complexity, so this
 	;; scales a lot better.  bug#4485.
-	(dolist (i bookmark-alist) (pp i (current-buffer)))
+	(let ((pp-default-function #'pp-28))
+	  (dolist (i bookmark-alist) (pp i (current-buffer))))
 	(insert ")\n")
 	;; Make sure the specified encoding can safely encode the
 	;; bookmarks.  If it cannot, suggest utf-8-emacs as default.

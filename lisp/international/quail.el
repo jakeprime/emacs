@@ -1,6 +1,6 @@
 ;;; quail.el --- provides simple input method for multilingual text  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1997-1998, 2000-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1997-1998, 2000-2025 Free Software Foundation, Inc.
 ;; Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
 ;;   2005, 2006, 2007, 2008, 2009, 2010, 2011
 ;;   National Institute of Advanced Industrial Science and Technology (AIST)
@@ -836,6 +836,8 @@ The format of KBD-LAYOUT is the same as `quail-keyboard-layout'."
                                       (format "\t%c\t" upper))
                     (string upper))))
 	(insert (bidi-string-mark-left-to-right lower)
+                ;; This invisible space is here to prevent the display
+                ;; engine from composing these two characters on display.
 		(propertize " " 'invisible t)
 		(bidi-string-mark-left-to-right upper))
 	(if (< (string-width upper) 2)

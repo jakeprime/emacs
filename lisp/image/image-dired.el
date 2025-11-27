@@ -1,6 +1,6 @@
 ;;; image-dired.el --- use dired to browse and manipulate your images -*- lexical-binding: t -*-
 
-;; Copyright (C) 2005-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2005-2025 Free Software Foundation, Inc.
 
 ;; Author: Mathias Dahl <mathias.rem0veth1s.dahl@gmail.com>
 ;; Maintainer: Stefan Kangas <stefankangas@gmail.com>
@@ -1239,6 +1239,8 @@ Ask user how many thumbnails should be displayed per row."
 
 ;;; Display image from thumbnail buffer
 
+(declare-function w32-shell-execute "w32fns.c")
+
 (defun image-dired-thumbnail-display-external ()
   "Display original image for thumbnail at point using external viewer.
 The viewer command is specified by `image-dired-external-viewer'."
@@ -1248,9 +1250,15 @@ The viewer command is specified by `image-dired-external-viewer'."
         (message "No thumbnail at point")
       (if (not file)
           (message "No original file name found")
-        (apply #'start-process "image-dired-thumb-external" nil
-               (append (string-split image-dired-external-viewer " ")
-                       (list file)))))))
+        (cond
+         ((stringp image-dired-external-viewer)
+          (apply #'start-process "image-dired-thumb-external" nil
+                 (append (string-split image-dired-external-viewer " ")
+                         (list file))))
+         ((eq system-type 'windows-nt)
+          (w32-shell-execute "open" file))
+         (t
+          (error "`image-dired-external-viewer' does not name an image viewer program")))))))
 
 (defun image-dired-display-image (file &optional _ignored)
   "Display image FILE in the image buffer window.

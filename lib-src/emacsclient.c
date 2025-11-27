@@ -1,6 +1,6 @@
 /* Client process that communicates with GNU Emacs acting as server.
 
-Copyright (C) 1986-2024 Free Software Foundation, Inc.
+Copyright (C) 1986-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -173,6 +173,7 @@ static struct option const longopts[] =
   { "version",	no_argument,	   NULL, 'V' },
   { "tty",	no_argument,       NULL, 't' },
   { "nw",	no_argument,       NULL, 't' },
+  { "no-window-system",	no_argument, NULL, 't' },
   { "create-frame", no_argument,   NULL, 'c' },
   { "reuse-frame", no_argument,   NULL, 'r' },
   { "alternate-editor", required_argument, NULL, 'a' },
@@ -690,7 +691,8 @@ Every FILE can be either just a FILENAME or [+LINE[:COLUMN]] FILENAME.\n\
 The following OPTIONS are accepted:\n\
 -V, --version		Just print version info and return\n\
 -H, --help    		Print this usage information message\n\
--nw, -t, --tty 		Open a new Emacs frame on the current terminal\n\
+-nw, -t, --tty, --no-window-system\n\
+			Open a new Emacs frame on the current terminal\n\
 -c, --create-frame    	Create a new frame instead of trying to\n\
 			use the current Emacs frame\n\
 -r, --reuse-frame	Create a new frame if none exists, otherwise\n\
@@ -1713,8 +1715,13 @@ set_socket (bool no_exit_if_error)
 }
 
 #ifdef HAVE_NTGUI
-FARPROC set_fg;  /* Pointer to AllowSetForegroundWindow.  */
-FARPROC get_wc;  /* Pointer to RealGetWindowClassA.  */
+typedef void (* VOIDFNPTR) (void);
+typedef BOOL (WINAPI *AllowSetForegroundWindow_proc) (DWORD);
+/* Pointer to AllowSetForegroundWindow.  */
+static AllowSetForegroundWindow_proc set_fg;
+typedef UINT (WINAPI *RealGetWindowClassA_proc) (HWND, LPSTR, UINT);
+/* Pointer to RealGetWindowClassA.  */
+static RealGetWindowClassA_proc get_wc;
 
 void w32_set_user_model_id (void);
 
@@ -1792,8 +1799,8 @@ w32_give_focus (void)
      emacsclient can allow Emacs to grab the focus by calling the function
      AllowSetForegroundWindow.  Unfortunately, older Windows (W95, W98 and
      NT) lack this function, so we have to check its availability.  */
-  if ((set_fg = GetProcAddress (user32, "AllowSetForegroundWindow"))
-      && (get_wc = GetProcAddress (user32, "RealGetWindowClassA")))
+  if ((set_fg = (AllowSetForegroundWindow_proc) (VOIDFNPTR) GetProcAddress (user32, "AllowSetForegroundWindow"))
+      && (get_wc = (RealGetWindowClassA_proc) (VOIDFNPTR) GetProcAddress (user32, "RealGetWindowClassA")))
     EnumWindows (w32_find_emacs_process, (LPARAM) 0);
 }
 #endif /* HAVE_NTGUI */

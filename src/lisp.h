@@ -1,6 +1,6 @@
 /* Fundamental definitions for GNU Emacs Lisp interpreter. -*- coding: utf-8 -*-
 
-Copyright (C) 1985-2024 Free Software Foundation, Inc.
+Copyright (C) 1985-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -4371,8 +4371,8 @@ extern void insert (const char *, ptrdiff_t);
 extern void insert_and_inherit (const char *, ptrdiff_t);
 extern void insert_1_both (const char *, ptrdiff_t, ptrdiff_t,
 			   bool, bool, bool);
-extern void insert_from_gap_1 (ptrdiff_t, ptrdiff_t, bool text_at_gap_tail);
-extern void insert_from_gap (ptrdiff_t, ptrdiff_t, bool text_at_gap_tail);
+extern void insert_from_gap_1 (ptrdiff_t, ptrdiff_t, bool);
+extern void insert_from_gap (ptrdiff_t, ptrdiff_t, bool, bool);
 extern void insert_from_string (Lisp_Object, ptrdiff_t, ptrdiff_t,
 				ptrdiff_t, ptrdiff_t, bool);
 extern void insert_from_buffer (struct buffer *, ptrdiff_t, ptrdiff_t, bool);
@@ -4399,6 +4399,8 @@ extern void adjust_after_insert (ptrdiff_t, ptrdiff_t, ptrdiff_t,
 				 ptrdiff_t, ptrdiff_t);
 extern void adjust_markers_for_delete (ptrdiff_t, ptrdiff_t,
 				       ptrdiff_t, ptrdiff_t);
+extern void adjust_markers_for_insert (ptrdiff_t, ptrdiff_t,
+				       ptrdiff_t, ptrdiff_t, bool);
 extern void adjust_markers_bytepos (ptrdiff_t, ptrdiff_t,
 				    ptrdiff_t, ptrdiff_t, int);
 extern void replace_range (ptrdiff_t, ptrdiff_t, Lisp_Object, bool, bool,
@@ -4508,7 +4510,7 @@ flush_stack_call_func (void (*func) (void *arg), void *arg)
   /* Work around GCC sibling call optimization making
      '__builtin_unwind_init' ineffective (bug#65727).
      See <https://gcc.gnu.org/bugzilla/show_bug.cgi?id=115132>.  */
-#if defined __GNUC__ && !defined __clang__
+#if defined __GNUC__ && !defined __clang__ && !defined __OBJC__
   asm ("");
 #endif
 }
@@ -5179,7 +5181,7 @@ extern void syms_of_frame (void);
 extern char **initial_argv;
 extern int initial_argc;
 extern char const *emacs_wd;
-#if defined (HAVE_X_WINDOWS) || defined (HAVE_NS)
+#if defined (HAVE_X_WINDOWS) || defined (HAVE_PGTK) || defined (HAVE_NS)
 extern bool display_arg;
 #endif
 extern Lisp_Object decode_env_path (const char *, const char *, bool);
@@ -5542,15 +5544,15 @@ extern void syms_of_textconv (void);
 
 #ifdef HAVE_NATIVE_COMP
 INLINE bool
-SUBR_NATIVE_COMPILEDP (Lisp_Object a)
+NATIVE_COMP_FUNCTIONP (Lisp_Object a)
 {
   return SUBRP (a) && !NILP (XSUBR (a)->native_comp_u);
 }
 
 INLINE bool
-SUBR_NATIVE_COMPILED_DYNP (Lisp_Object a)
+NATIVE_COMP_FUNCTION_DYNP (Lisp_Object a)
 {
-  return SUBR_NATIVE_COMPILEDP (a) && !NILP (XSUBR (a)->lambda_list);
+  return NATIVE_COMP_FUNCTIONP (a) && !NILP (XSUBR (a)->lambda_list);
 }
 
 INLINE Lisp_Object
@@ -5567,13 +5569,13 @@ allocate_native_comp_unit (void)
 }
 #else
 INLINE bool
-SUBR_NATIVE_COMPILEDP (Lisp_Object a)
+NATIVE_COMP_FUNCTIONP (Lisp_Object a)
 {
   return false;
 }
 
 INLINE bool
-SUBR_NATIVE_COMPILED_DYNP (Lisp_Object a)
+NATIVE_COMP_FUNCTION_DYNP (Lisp_Object a)
 {
   return false;
 }

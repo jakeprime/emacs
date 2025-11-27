@@ -1,6 +1,6 @@
 /* Lisp parsing and input streams.
 
-Copyright (C) 1985-1989, 1993-1995, 1997-2024 Free Software Foundation,
+Copyright (C) 1985-1989, 1993-1995, 1997-2025 Free Software Foundation,
 Inc.
 
 This file is part of GNU Emacs.
@@ -69,7 +69,7 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #define lread_fd_cmp(n) (fd == (n))
 #define lread_fd_p	(fd >= 0)
 #define lread_close	emacs_close
-#define lread_fstat	fstat
+#define lread_fstat	sys_fstat
 #define lread_read_quit	emacs_read_quit
 #define lread_lseek	lseek
 
@@ -859,7 +859,7 @@ read_filtered_event (bool no_switch_frame, bool ascii_required,
 
 DEFUN ("read-char", Fread_char, Sread_char, 0, 3, 0,
        doc: /* Read a character event from the command input (keyboard or macro).
-It is returned as a number.
+Return the character as a number.
 If the event has modifiers, they are resolved and reflected in the
 returned character code if possible (e.g. C-SPC yields 0 and C-a yields 97).
 If some of the modifiers cannot be reflected in the character code, the
@@ -907,7 +907,7 @@ If `inhibit-interaction' is non-nil, this function will signal an
 }
 
 DEFUN ("read-event", Fread_event, Sread_event, 0, 3, 0,
-       doc: /* Read an event object from the input stream.
+       doc: /* Read and return an event object from the input stream.
 
 If you want to read non-character events, consider calling `read-key'
 instead.  `read-key' will decode events via `input-decode-map' that
@@ -943,7 +943,7 @@ If `inhibit-interaction' is non-nil, this function will signal an
 
 DEFUN ("read-char-exclusive", Fread_char_exclusive, Sread_char_exclusive, 0, 3, 0,
        doc: /* Read a character event from the command input (keyboard or macro).
-It is returned as a number.  Non-character events are ignored.
+Return the character as a number.  Non-character events are ignored.
 If the event has modifiers, they are resolved and reflected in the
 returned character code if possible (e.g. C-SPC yields 0 and C-a yields 97).
 If some of the modifiers cannot be reflected in the character code, the
@@ -983,16 +983,6 @@ If `inhibit-interaction' is non-nil, this function will signal an
   return (NILP (val) ? Qnil
 	  : make_fixnum (char_resolve_modifier_mask (XFIXNUM (val))));
 }
-
-DEFUN ("get-file-char", Fget_file_char, Sget_file_char, 0, 0, 0,
-       doc: /* Don't use this yourself.  */)
-  (void)
-{
-  if (!infile)
-    error ("get-file-char misused");
-  return make_fixnum (readbyte_from_stdio ());
-}
-
 
 
 
@@ -1762,6 +1752,9 @@ Return t if the file exists and loads successfully.  */)
       saved_strings[i].size = 0;
     }
 
+  /* The "...done" messages are shown only in interactive mode, because
+     the echo-area can display only the last message, and we want to
+     avoid the impression that the load is still in progress.  */
   if (!noninteractive && (NILP (nomessage) || force_load_messages))
     {
       if (is_module)
@@ -1897,7 +1890,7 @@ maybe_swap_for_eln (bool no_native, Lisp_Object *filename, int *fd,
 		return;
 	      Vdelayed_warnings_list
 		= Fcons (list2
-			 (Qcomp,
+			 (Qnative_compiler,
 			  CALLN (Fformat,
 				 build_string ("Cannot look up .eln file "
 					       "for %s because no source "
@@ -2320,7 +2313,7 @@ build_load_history (Lisp_Object filename, bool entire)
   if (entire || !foundit)
     {
       Lisp_Object tem = Fnreverse (Vcurrent_load_list);
-      eassert (EQ (filename, Fcar (tem)));
+      eassert (!NILP (Fequal (filename, Fcar (tem))));
       Vload_history = Fcons (tem, Vload_history);
       /* FIXME: There should be an unbind_to right after calling us which
          should re-establish the previous value of Vcurrent_load_list.  */
@@ -3920,6 +3913,8 @@ read_stack_reset (intmax_t sp)
 
 #define READ_AND_BUFFER(c)			\
   c = READCHAR;					\
+  if (c < 0)					\
+    INVALID_SYNTAX_WITH_BUFFER ();		\
   if (multibyte)				\
     p += CHAR_STRING (c, (unsigned char *) p);	\
   else						\
@@ -5832,7 +5827,6 @@ syms_of_lread (void)
   defsubr (&Sread_char);
   defsubr (&Sread_char_exclusive);
   defsubr (&Sread_event);
-  defsubr (&Sget_file_char);
   defsubr (&Smapatoms);
   defsubr (&Slocate_file_internal);
   defsubr (&Sinternal__obarray_buckets);

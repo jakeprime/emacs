@@ -1,6 +1,6 @@
 /* Generic frame functions.
 
-Copyright (C) 1993-1995, 1997, 1999-2024 Free Software Foundation, Inc.
+Copyright (C) 1993-1995, 1997, 1999-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -983,6 +983,8 @@ make_frame (bool mini_p)
   f->tooltip = false;
   f->was_invisible = false;
   f->child_frame_border_width = -1;
+  f->face_cache = NULL;
+  f->image_cache = NULL;
   f->last_tab_bar_item = -1;
 #ifndef HAVE_EXT_TOOL_BAR
   f->last_tool_bar_item = -1;
@@ -2408,17 +2410,19 @@ delete_frame (Lisp_Object frame, Lisp_Object force)
 	  struct frame *f1 = XFRAME (frame1);
 
 	  /* Set frame_on_same_kboard to frame1 if it is on the same
-	     keyboard.  Set frame_with_minibuf to frame1 if it also
-	     has a minibuffer.  Leave the loop immediately if frame1
-	     is also minibuffer-only.
+	     keyboard and is not a tooltip frame.  Set
+	     frame_with_minibuf to frame1 if it also has a minibuffer.
+	     Leave the loop immediately if frame1 is also
+	     minibuffer-only.
 
-	     Emacs 26 does _not_ set frame_on_same_kboard here when it
-	     finds a minibuffer-only frame and subsequently fails to
+	     Emacs 26 did _not_ set frame_on_same_kboard here when it
+	     found a minibuffer-only frame, and subsequently failed to
 	     set default_minibuffer_frame below.  Not a great deal and
-	     never noticed since make_frame_without_minibuffer creates
-	     a new minibuffer frame in that case (which can be a minor
-	     annoyance though).  To consider for Emacs 26.3.  */
-	  if (kb == FRAME_KBOARD (f1))
+	     never noticed since make_frame_without_minibuffer created a
+	     new minibuffer frame in that case (which can be a minor
+	     annoyance though).  */
+	  if (!FRAME_TOOLTIP_P (f1)
+	      && kb == FRAME_KBOARD (f1))
 	    {
 	      frame_on_same_kboard = frame1;
 	      if (FRAME_HAS_MINIBUF_P (f1))
@@ -4732,7 +4736,7 @@ void
 gui_set_font (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
 {
   Lisp_Object font_object;
-  int fontset = -1;
+  int fontset = -1, iwidth;
 
   /* Set the frame parameter back to the old value because we may
      fail to use ARG as the new parameter value.  */
@@ -4810,6 +4814,35 @@ gui_set_font (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
   f->n_tab_bar_rows = 0;
   /* Recalculate toolbar height.  */
   f->n_tool_bar_rows = 0;
+
+  /* Re-initialize F's image cache.  Since `set_new_font_hook' might
+     have changed the frame's column width, by which images are scaled,
+     it might likewise need to be assigned a different image cache, or
+     have its existing cache adjusted, if by coincidence it is its sole
+     user.  */
+
+  iwidth = max (10, FRAME_COLUMN_WIDTH (f));
+  if (FRAME_IMAGE_CACHE (f)
+      && (iwidth != FRAME_IMAGE_CACHE (f)->scaling_col_width))
+    {
+      eassert (FRAME_IMAGE_CACHE (f)->refcount >= 1);
+      if (FRAME_IMAGE_CACHE (f)->refcount == 1)
+	{
+	  /* This frame is the only user of this image cache.  */
+	  FRAME_IMAGE_CACHE (f)->scaling_col_width = iwidth;
+	  /* Clean F's image cache of images whose values are derived
+	     from the font width.  */
+	  clear_image_cache (f, Qauto);
+	}
+      else
+	{
+	  /* Release the current image cache, and reuse or allocate a
+	     new image cache with IWIDTH.  */
+	  FRAME_IMAGE_CACHE (f)->refcount--;
+	  FRAME_IMAGE_CACHE (f) = share_image_cache (f);
+	  FRAME_IMAGE_CACHE (f)->refcount++;
+	}
+    }
 
   /* Ensure we redraw it.  */
   clear_current_matrices (f);
@@ -5071,15 +5104,19 @@ gui_set_scroll_bar_width (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
 {
   int unit = FRAME_COLUMN_WIDTH (f);
 
-  if (RANGED_FIXNUMP (1, arg, INT_MAX)
-      && XFIXNAT (arg) != FRAME_CONFIG_SCROLL_BAR_WIDTH (f))
+  if (RANGED_FIXNUMP (1, arg, INT_MAX))
     {
-      FRAME_CONFIG_SCROLL_BAR_WIDTH (f) = XFIXNAT (arg);
-      FRAME_CONFIG_SCROLL_BAR_COLS (f) = (XFIXNAT (arg) + unit - 1) / unit;
-      if (FRAME_NATIVE_WINDOW (f))
-	adjust_frame_size (f, -1, -1, 3, 0, Qscroll_bar_width);
+      if (XFIXNAT (arg) == FRAME_CONFIG_SCROLL_BAR_WIDTH (f))
+	return;
+      else
+	{
+	  FRAME_CONFIG_SCROLL_BAR_WIDTH (f) = XFIXNAT (arg);
+	  FRAME_CONFIG_SCROLL_BAR_COLS (f) = (XFIXNAT (arg) + unit - 1) / unit;
+	  if (FRAME_NATIVE_WINDOW (f))
+	    adjust_frame_size (f, -1, -1, 3, 0, Qscroll_bar_width);
 
-      SET_FRAME_GARBAGED (f);
+	  SET_FRAME_GARBAGED (f);
+	}
     }
   else
     {
@@ -5102,15 +5139,19 @@ gui_set_scroll_bar_height (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
 #if USE_HORIZONTAL_SCROLL_BARS
   int unit = FRAME_LINE_HEIGHT (f);
 
-  if (RANGED_FIXNUMP (1, arg, INT_MAX)
-      && XFIXNAT (arg) != FRAME_CONFIG_SCROLL_BAR_HEIGHT (f))
+  if (RANGED_FIXNUMP (1, arg, INT_MAX))
     {
-      FRAME_CONFIG_SCROLL_BAR_HEIGHT (f) = XFIXNAT (arg);
-      FRAME_CONFIG_SCROLL_BAR_LINES (f) = (XFIXNAT (arg) + unit - 1) / unit;
-      if (FRAME_NATIVE_WINDOW (f))
-	adjust_frame_size (f, -1, -1, 3, 0, Qscroll_bar_height);
+      if (XFIXNAT (arg) == FRAME_CONFIG_SCROLL_BAR_HEIGHT (f))
+	return;
+      else
+	{
+	  FRAME_CONFIG_SCROLL_BAR_HEIGHT (f) = XFIXNAT (arg);
+	  FRAME_CONFIG_SCROLL_BAR_LINES (f) = (XFIXNAT (arg) + unit - 1) / unit;
+	  if (FRAME_NATIVE_WINDOW (f))
+	    adjust_frame_size (f, -1, -1, 3, 0, Qscroll_bar_height);
 
-      SET_FRAME_GARBAGED (f);
+	  SET_FRAME_GARBAGED (f);
+	}
     }
   else
     {
@@ -6756,11 +6797,11 @@ Gtk+ tooltips are not used) and on Windows.  */);
   tooltip_reuse_hidden_frame = false;
 
   DEFVAR_BOOL ("use-system-tooltips", use_system_tooltips,
-	       doc: /* Use the toolkit to display tooltips.
-This option is only meaningful when Emacs is built with GTK+ or Haiku
-windowing support, and results in tooltips that look like those
-displayed by other GTK+ or Haiku programs, but will not be able to
-display text properties inside tooltip text.  */);
+	       doc: /* Whether to use the toolkit to display tooltips.
+This option is only meaningful when Emacs is built with GTK+, NS or Haiku
+windowing support, and, if it's non-nil (the default), it results in
+tooltips that look like those displayed by other GTK+/NS/Haiku programs,
+but will not be able to display text properties inside tooltip text.  */);
   use_system_tooltips = true;
 
   DEFVAR_LISP ("iconify-child-frame", iconify_child_frame,

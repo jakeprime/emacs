@@ -1,5 +1,5 @@
 /* Coding system handler (conversion, detection, etc).
-   Copyright (C) 2001-2024 Free Software Foundation, Inc.
+   Copyright (C) 2001-2025 Free Software Foundation, Inc.
    Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
      2005, 2006, 2007, 2008, 2009, 2010, 2011
      National Institute of Advanced Industrial Science and Technology (AIST)
@@ -27,11 +27,11 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
   0. General comments
   1. Preamble
-  2. Emacs' internal format (emacs-utf-8) handlers
+  2. Emacs's internal format (emacs-utf-8) handlers
   3. UTF-8 handlers
   4. UTF-16 handlers
   5. Charset-base coding systems handlers
-  6. emacs-mule (old Emacs' internal format) handlers
+  6. emacs-mule (old Emacs's internal format) handlers
   7. ISO2022 handlers
   8. Shift-JIS and BIG5 handlers
   9. CCL handlers
@@ -50,7 +50,7 @@ CODING SYSTEM
   information about how to convert byte sequences to character
   sequences and vice versa.  When we say "decode", it means converting
   a byte sequence of a specific coding system into a character
-  sequence that is represented by Emacs' internal coding system
+  sequence that is represented by Emacs's internal coding system
   `emacs-utf-8', and when we say "encode", it means converting a
   character sequence of emacs-utf-8 to a byte sequence of a specific
   coding system.
@@ -1104,7 +1104,7 @@ alloc_destination (struct coding_system *coding, ptrdiff_t nbytes,
 #define EOL_SEEN_CRLF	4
 
 
-/*** 2. Emacs' internal format (emacs-utf-8) ***/
+/*** 2. Emacs's internal format (emacs-utf-8) ***/
 
 
 
@@ -1757,9 +1757,9 @@ encode_coding_utf_16 (struct coding_system *coding)
 }
 
 
-/*** 6. Old Emacs' internal format (emacs-mule) ***/
+/*** 6. Old Emacs's internal format (emacs-mule) ***/
 
-/* Emacs' internal format for representation of multiple character
+/* Emacs's internal format for representation of multiple character
    sets is a kind of multi-byte encoding, i.e. characters are
    represented by variable-length sequences of one-byte codes.
 
@@ -1782,7 +1782,7 @@ encode_coding_utf_16 (struct coding_system *coding)
    through 0xFF.  See `charset.h' for more details about leading-code
    and position-code.
 
-   --- CODE RANGE of Emacs' internal format ---
+   --- CODE RANGE of Emacs's internal format ---
    character set	range
    -------------	-----
    ascii		0x00..0x7F
@@ -2812,7 +2812,7 @@ encode_coding_emacs_mule (struct coding_system *coding)
    localized platforms), and all of these are variants of ISO2022.
 
    In addition to the above, Emacs handles two more kinds of escape
-   sequences: ISO6429's direction specification and Emacs' private
+   sequences: ISO6429's direction specification and Emacs's private
    sequence for specifying character composition.
 
    ISO6429's direction specification takes the following form:
@@ -5270,7 +5270,9 @@ decode_coding_raw_text (struct coding_system *coding)
   coding->chars_at_source = 1;
   coding->consumed_char = coding->src_chars;
   coding->consumed = coding->src_bytes;
-  if (eol_dos && coding->source[coding->src_bytes - 1] == '\r')
+  if (eol_dos
+      && coding->src_bytes > 0	/* empty source text? */
+      && coding->source[coding->src_bytes - 1] == '\r')
     {
       coding->consumed_char--;
       coding->consumed--;
@@ -5698,6 +5700,7 @@ setup_coding_system (Lisp_Object coding_system, struct coding_system *coding)
   coding->default_char = XFIXNUM (CODING_ATTR_DEFAULT_CHAR (attrs));
   coding->carryover_bytes = 0;
   coding->raw_destination = 0;
+  coding->insert_before_markers = 0;
 
   coding_type = CODING_ATTR_TYPE (attrs);
   if (EQ (coding_type, Qundecided))
@@ -6044,7 +6047,7 @@ complement_process_encoding_system (Lisp_Object coding_system)
 
 
 /* Emacs has a mechanism to automatically detect a coding system if it
-   is one of Emacs' internal format, ISO2022, SJIS, and BIG5.  But,
+   is one of Emacs's internal format, ISO2022, SJIS, and BIG5.  But,
    it's impossible to distinguish some coding systems accurately
    because they use the same range of codes.  So, at first, coding
    systems are categorized into 7, those are:
@@ -6052,7 +6055,7 @@ complement_process_encoding_system (Lisp_Object coding_system)
    o coding-category-emacs-mule
 
    	The category for a coding system which has the same code range
-	as Emacs' internal format.  Assigned the coding-system (Lisp
+	as Emacs's internal format.  Assigned the coding-system (Lisp
 	symbol) `emacs-mule' by default.
 
    o coding-category-sjis
@@ -7209,7 +7212,8 @@ produce_chars (struct coding_system *coding, Lisp_Object translation_table,
 
   produced = dst - (coding->destination + coding->produced);
   if (BUFFERP (coding->dst_object) && produced_chars > 0)
-    insert_from_gap (produced_chars, produced, 0);
+    insert_from_gap (produced_chars, produced, 0,
+		     coding->insert_before_markers);
   coding->produced += produced;
   coding->produced_char += produced_chars;
   return carryover;
@@ -7814,7 +7818,8 @@ encode_coding (struct coding_system *coding)
   } while (coding->consumed_char < coding->src_chars);
 
   if (BUFFERP (coding->dst_object) && coding->produced_char > 0)
-    insert_from_gap (coding->produced_char, coding->produced, 0);
+    insert_from_gap (coding->produced_char, coding->produced, 0,
+		     coding->insert_before_markers);
 
   SAFE_FREE ();
 }
@@ -8008,7 +8013,7 @@ decode_coding_gap (struct coding_system *coding, ptrdiff_t bytes)
 	    }
 	  coding->produced = bytes;
 	  coding->produced_char = chars;
-	  insert_from_gap (chars, bytes, 1);
+	  insert_from_gap (chars, bytes, 1, coding->insert_before_markers);
 	  return;
 	}
     }
@@ -8620,7 +8625,8 @@ about coding-system objects.  */)
 
 DEFUN ("read-non-nil-coding-system", Fread_non_nil_coding_system,
        Sread_non_nil_coding_system, 1, 1, 0,
-       doc: /* Read a coding system from the minibuffer, prompting with string PROMPT.  */)
+       doc: /* Read a coding system from the minibuffer, prompting with string PROMPT.
+Return the symbol of the coding-system.  */)
   (Lisp_Object prompt)
 {
   Lisp_Object val;
@@ -8636,6 +8642,8 @@ DEFUN ("read-non-nil-coding-system", Fread_non_nil_coding_system,
 DEFUN ("read-coding-system", Fread_coding_system, Sread_coding_system, 1, 2, 0,
        doc: /* Read a coding system from the minibuffer, prompting with string PROMPT.
 If the user enters null input, return second argument DEFAULT-CODING-SYSTEM.
+Return the coding-system's symbol, or nil if both the user input and
+DEFAULT-CODING-SYSTEM are empty or null.
 Ignores case when completing coding systems (all Emacs coding systems
 are lower-case).  */)
   (Lisp_Object prompt, Lisp_Object default_coding_system)
@@ -9980,7 +9988,7 @@ encode_string_utf_8 (Lisp_Object string, Lisp_Object buffer,
       struct buffer *oldb = current_buffer;
 
       current_buffer = XBUFFER (buffer);
-      insert_from_gap (outbytes, outbytes, false);
+      insert_from_gap (outbytes, outbytes, false, false);
       current_buffer = oldb;
     }
   return val;
@@ -10049,7 +10057,7 @@ encode_string_utf_8 (Lisp_Object string, Lisp_Object buffer,
    Emacs decoding does.
 
    If HANDLE-OVER-UNI is Qt, decode a 4 or 5-byte overlong sequence
-   that follows Emacs' internal representation for a character beyond
+   that follows Emacs's internal representation for a character beyond
    Unicode range into the corresponding character, like the usual
    Emacs decoding does.
 
@@ -10290,7 +10298,7 @@ decode_string_utf_8 (Lisp_Object string, const char *str, ptrdiff_t str_len,
       struct buffer *oldb = current_buffer;
 
       current_buffer = XBUFFER (buffer);
-      insert_from_gap (outchars, outbytes, false);
+      insert_from_gap (outchars, outbytes, false, false);
       current_buffer = oldb;
     }
   return val;
@@ -10402,7 +10410,7 @@ DEFUN ("internal-decode-string-utf-8", Finternal_decode_string_utf_8,
   if (NILP (decode_method))
     {
       for (int i = 0; i < repeat_count; i++)
-	val = decode_string_utf_8 (string, buffer, ! NILP (nocopy),
+	val = decode_string_utf_8 (string, NULL, -1, buffer, ! NILP (nocopy),
 				   handle_8_bit, handle_over_uni);
     }
   else if (EQ (decode_method, Qt))

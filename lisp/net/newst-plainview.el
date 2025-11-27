@@ -1,9 +1,8 @@
 ;;; newst-plainview.el --- Single buffer frontend for newsticker.  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2003-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2003-2025 Free Software Foundation, Inc.
 
 ;; Author:      Ulf Jasper <ulf.jasper@web.de>
-;; Filename:    newst-plainview.el
 ;; URL:         https://www.nongnu.org/newsticker
 ;; Package:     newsticker
 

@@ -1,6 +1,6 @@
 ;;; indent-aux.el --- Autoloaded indentation commands for Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2023-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2023-2025 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Package: emacs
@@ -45,10 +45,14 @@ is yanked."
           end (max a b)))
   (let ((indentation (save-excursion (goto-char beg)
                                      (current-column)))
+        (i-t-m indent-tabs-mode)
         (text (if delete
                   (delete-and-extract-region beg end)
                 (buffer-substring beg end))))
     (with-temp-buffer
+      ;; Indent/deindent the same as the major mode in the original
+      ;; buffer.
+      (setq indent-tabs-mode i-t-m)
       (insert text)
       (indent-rigidly (point-min) (point-max)
                       (- indentation))

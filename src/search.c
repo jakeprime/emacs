@@ -1,6 +1,6 @@
 /* String search routines for GNU Emacs.
 
-Copyright (C) 1985-1987, 1993-1994, 1997-1999, 2001-2024 Free Software
+Copyright (C) 1985-1987, 1993-1994, 1997-1999, 2001-2025 Free Software
 Foundation, Inc.
 
 This file is part of GNU Emacs.
@@ -2279,7 +2279,7 @@ The optional second argument BOUND is a buffer position that bounds
   value of nil means search to the end of the accessible portion of
   the buffer.
 The optional third argument NOERROR indicates how errors are handled
-  when the search fails.  If it is nil or omitted, emit an error; if
+  when the search fails: if it is nil or omitted, emit an error; if
   it is t, simply return nil and do nothing; if it is neither nil nor
   t, move to the limit of search and return nil.
 The optional fourth argument COUNT is a number that indicates the
@@ -2762,7 +2762,6 @@ since only regular expressions have distinguished subexpressions.  */)
 
   /* Replace the old text with the new in the cleanest possible way.  */
   replace_range (sub_start, sub_end, newtext, 1, 0, 1, true, true);
-  signal_after_change (sub_start, sub_end - sub_start, SCHARS (newtext));
 
   if (case_action == all_caps)
     Fupcase_region (make_fixnum (search_regs.start[sub]),
@@ -2787,6 +2786,7 @@ since only regular expressions have distinguished subexpressions.  */)
   /* Now move point "officially" to the end of the inserted replacement.  */
   move_if_not_intangible (newpoint);
 
+  signal_after_change (sub_start, sub_end - sub_start, SCHARS (newtext));
   update_compositions (sub_start, newpoint, CHECK_BORDER);
 
   return Qnil;
@@ -2812,11 +2812,12 @@ match_limit (Lisp_Object num, bool beginningp)
 
 DEFUN ("match-beginning", Fmatch_beginning, Smatch_beginning, 1, 1, 0,
        doc: /* Return position of start of text matched by last search.
-SUBEXP, a number, specifies which parenthesized expression in the last
-  regexp.
-Value is nil if SUBEXPth pair didn't match, or there were less than
-  SUBEXP pairs.
-Zero means the entire text matched by the whole regexp or whole string.
+SUBEXP, a number, specifies the parenthesized subexpression in the last
+  regexp for which to return the start position.
+Value is nil if SUBEXPth subexpression didn't match, or there were fewer
+  than SUBEXP subexpressions.
+SUBEXP zero means the entire text matched by the whole regexp or whole
+  string.
 
 Return value is undefined if the last search failed.  */)
   (Lisp_Object subexp)
@@ -2826,11 +2827,12 @@ Return value is undefined if the last search failed.  */)
 
 DEFUN ("match-end", Fmatch_end, Smatch_end, 1, 1, 0,
        doc: /* Return position of end of text matched by last search.
-SUBEXP, a number, specifies which parenthesized expression in the last
-  regexp.
-Value is nil if SUBEXPth pair didn't match, or there were less than
-  SUBEXP pairs.
-Zero means the entire text matched by the whole regexp or whole string.
+SUBEXP, a number, specifies the parenthesized subexpression in the last
+  regexp for which to return the start position.
+Value is nil if SUBEXPth subexpression didn't match, or there were fewer
+  than SUBEXP subexpressions.
+SUBEXP zero means the entire text matched by the whole regexp or whole
+  string.
 
 Return value is undefined if the last search failed.  */)
   (Lisp_Object subexp)

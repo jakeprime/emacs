@@ -1,6 +1,6 @@
 ;;; completion-preview.el --- Preview completion with inline overlay  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2023-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2023-2025 Free Software Foundation, Inc.
 
 ;; Author: Eshel Yaron <me@eshelyaron.com>
 ;; Maintainer: Eshel Yaron <me@eshelyaron.com>
@@ -59,6 +59,12 @@
 ;; that should appear around point for Emacs to suggest a completion.
 ;; By default, this option is set to 3, so Emacs suggests a completion
 ;; if you type "foo", but typing just "fo" doesn't show the preview.
+;; If you want the preview to appear also after non-symbol characters,
+;; such as punctuation, set `completion-preview-minimum-symbol-length'
+;; to nil.  If you do so, you may want to customize the user option
+;; `completion-preview-idle-delay' to have the preview appear only
+;; when you pause typing for a short duration rather than after every
+;; key.  Try setting it to 0.2 seconds and see how that works for you.
 
 ;;; Code:
 
@@ -90,8 +96,12 @@ first candidate, and you can cycle between the candidates with
   :version "30.1")
 
 (defcustom completion-preview-minimum-symbol-length 3
-  "Minimum length of the symbol at point for showing completion preview."
-  :type 'natnum
+  "Minimum length of the symbol at point for showing completion preview.
+
+If this is nil rather than a number of characters, show the preview also
+after non-symbol characters, such as punctuation or whitespace."
+  :type '(choice (natnum :tag "Minimum number of symbol characters")
+                 (const :tag "Disable minimum symbol length requirement" nil))
   :version "30.1")
 
 (defcustom completion-preview-message-format
@@ -108,6 +118,14 @@ text around point.
 If this option is nil, these commands do not display any message."
   :type '(choice (string :tag "Message format")
                  (const :tag "No message" nil))
+  :version "30.1")
+
+(defcustom completion-preview-idle-delay nil
+  "If non-nil, wait this many idle seconds before displaying completion preview.
+
+If this is nil, display the completion preview without delay."
+  :type '(choice (number :tag "Delay duration in seconds")
+                 (const :tag "No delay" nil))
   :version "30.1")
 
 (defvar completion-preview-sort-function #'minibuffer--sort-by-length-alpha
@@ -195,9 +213,10 @@ Completion Preview mode avoids updating the preview after these commands.")
 (defun completion-preview-require-minimum-symbol-length ()
   "Check if the length of symbol at point is at least above a certain threshold.
 `completion-preview-minimum-symbol-length' determines that threshold."
-  (let ((bounds (bounds-of-thing-at-point 'symbol)))
-    (and bounds (<= completion-preview-minimum-symbol-length
-                    (- (cdr bounds) (car bounds))))))
+  (or (null completion-preview-minimum-symbol-length)
+      (let ((bounds (bounds-of-thing-at-point 'symbol)))
+        (and bounds (<= completion-preview-minimum-symbol-length
+                        (- (cdr bounds) (car bounds)))))))
 
 (defun completion-preview-hide ()
   "Hide the completion preview."
@@ -274,6 +293,7 @@ candidates or if there are multiple matching completions and
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   (let* ((pred (plist-get props :predicate))
          (string (buffer-substring beg end))
+         (completion-extra-properties props)
          (md (completion-metadata string table pred))
          (sort-fn (or (completion-metadata-get md 'cycle-sort-function)
                       (completion-metadata-get md 'display-sort-function)
@@ -345,6 +365,18 @@ candidates or if there are multiple matching completions and
         (overlay-put ov 'completion-preview-props props)
         (completion-preview-active-mode)))))
 
+(defun completion-preview--try-update ()
+  "Try to update completion preview, but give up as soon as input arrives."
+  (while-no-input (completion-preview--update)))
+
+(defun completion-preview--update-from-timer (window buffer)
+  "Update completion preview if WINDOW and BUFFER are current."
+  (when (and (eq (selected-window) window) (eq (current-buffer) buffer))
+    (completion-preview--try-update)))
+
+(defvar-local completion-preview--timer nil
+  "Idle timer for updating the completion preview.")
+
 (defun completion-preview--show ()
   "Show a new completion preview.
 
@@ -387,7 +419,12 @@ point, otherwise hide it."
         ;; The previous preview is no longer applicable, hide it.
         (completion-preview-active-mode -1))))
   ;; Run `completion-at-point-functions' to get a new candidate.
-  (while-no-input (completion-preview--update)))
+  (if completion-preview-idle-delay
+      (setq completion-preview--timer
+            (run-with-idle-timer completion-preview-idle-delay
+                                 nil #'completion-preview--update-from-timer
+                                 (selected-window) (current-buffer)))
+    (completion-preview--try-update)))
 
 (defun completion-preview--post-command ()
   "Create, update or delete completion preview post last command."
@@ -396,13 +433,21 @@ point, otherwise hide it."
                               completion-preview--internal-commands))))
     (setq completion-preview--inhibit-update-p nil)
 
-    ;; If we're called after a command that itself updates the
-    ;; preview, don't do anything.
-    (unless internal-p
-      (if (and (completion-preview-require-certain-commands)
-               (completion-preview-require-minimum-symbol-length))
-          (completion-preview--show)
-        (completion-preview-active-mode -1)))))
+    (when (timerp completion-preview--timer)
+      (cancel-timer completion-preview--timer)
+      (setq completion-preview--timer nil))
+
+    (cond
+     (internal-p
+      ;; `this-command' took care of updating the preview.  Do nothing.
+      )
+     ((and (completion-preview-require-certain-commands)
+           (completion-preview-require-minimum-symbol-length))
+      ;; All conditions met.  Show or update the preview.
+      (completion-preview--show))
+     (completion-preview-active-mode
+      ;; The preview is shown, but it shouldn't be.  Hide it.
+      (completion-preview-active-mode -1)))))
 
 (defun completion-preview-insert ()
   "Insert the completion candidate that the preview is showing."
@@ -465,7 +510,7 @@ completions list."
                                      (funcall efn string status)))))
                ;; The predicate is meant for the original completion
                ;; candidates, which may be symbols or cons cells, but
-               ;; now we only have strings, so it might be unapplicable.
+               ;; now we only have strings, so it might not be applicable.
                (props (plist-put props :predicate nil))
                (completion-at-point-functions
                 (list (lambda () `(,beg ,end ,col ,@props)))))
@@ -480,6 +525,10 @@ completions list."
             ;; hook update the completion preview in case the candidate
             ;; can be completed further.
             (when (functionp efn)
+              ;; Remove stale preview since `efn' can make arbitrary
+              ;; text and point modifications that might interfere with
+              ;; a subsequent preview update.  See bug#76606.
+              (completion-preview-active-mode -1)
               (funcall efn (concat base com) (if (cdr all) 'exact 'finished)))
           ;; Otherwise, remove the common prefix from the preview.
           (completion-preview--inhibit-update)
@@ -565,7 +614,10 @@ backward."
   (if completion-preview-mode
       (add-hook 'post-command-hook #'completion-preview--post-command nil t)
     (remove-hook 'post-command-hook #'completion-preview--post-command t)
-    (completion-preview-active-mode -1)))
+    (when completion-preview-active-mode (completion-preview-active-mode -1))
+    (when (timerp completion-preview--timer)
+      (cancel-timer completion-preview--timer)
+      (setq completion-preview--timer nil))))
 
 ;;;###autoload
 (define-globalized-minor-mode global-completion-preview-mode

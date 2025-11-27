@@ -1,5 +1,5 @@
 /* Header for coding system handler.
-   Copyright (C) 2001-2024 Free Software Foundation, Inc.
+   Copyright (C) 2001-2025 Free Software Foundation, Inc.
    Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
      2005, 2006, 2007, 2008, 2009, 2010, 2011
      National Institute of Advanced Industrial Science and Technology (AIST)
@@ -427,6 +427,11 @@ struct coding_system
 
   /* Set to true if charbuf contains an annotation.  */
   bool_bf annotated : 1;
+
+  /* True if the decoded text should be inserted before markers in the
+     output buffer, if `dst_object' is a buffer.  Currently used only
+     when reading output from subprocesses.  */
+  bool_bf insert_before_markers : 1;
 
   /* Used internally in coding.c.  See the comment of detect_ascii.  */
   unsigned eol_seen : 3;

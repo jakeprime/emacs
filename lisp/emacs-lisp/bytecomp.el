@@ -1,6 +1,6 @@
 ;;; bytecomp.el --- compilation of Lisp code into byte code -*- lexical-binding: t -*-
 
-;; Copyright (C) 1985-1987, 1992, 1994, 1998, 2000-2024 Free Software
+;; Copyright (C) 1985-1987, 1992, 1994, 1998, 2000-2025 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Jamie Zawinski <jwz@lucid.com>
@@ -145,6 +145,8 @@ Possible values are:
   1 - emitted code is to be generated in a safe manner, even if functions
       are mis-declared.
 
+Note that \"safe\" does not mean \"correct\": if functions are declared
+incorrectly, the emitted code might also be incorrect.
 This currently affects only code produced by native-compilation."
   :type 'integer
   :safe #'integerp
@@ -1643,7 +1645,8 @@ extra args."
          nargs (if (= nargs 1) "" "s")
          nfields (if (= nfields 1) "" "s"))))))
 
-(dolist (elt '(format message format-message error))
+(dolist (elt '( format message format-message message-box message-or-box
+                warn error user-error))
   (put elt 'byte-compile-format-like t))
 
 ;; Warn if the function or macro is being redefined with a different
@@ -3831,7 +3834,7 @@ This assumes the function has the `important-return-value' property."
 (defun byte-compile-free-vars-warn (arg var &optional assignment)
   "Warn if symbol VAR refers to a free variable.
 VAR must not be lexically bound.
-ARG is a position argument, used by byte-compile-warn-x.
+ARG is a position argument, used by `byte-compile-warn-x'.
 If optional argument ASSIGNMENT is non-nil, this is treated as an
 assignment (i.e. `setq')."
   (unless (or (not (byte-compile-warning-enabled-p 'free-vars var))
@@ -5487,7 +5490,7 @@ OP and OPERAND are as passed to `byte-compile-out'."
 (defun byte-compile-out (op &optional operand)
   "Push the operation onto `byte-compile-output'.
 OP is an opcode, a symbol.  OPERAND is either nil or a number or
-a one-element list of a lisp form."
+a one-element list of a Lisp form."
   (when (and (consp operand) (null (cdr operand)))
     (setq operand (byte-run-strip-symbol-positions operand)))
   (push (cons op operand) byte-compile-output)
@@ -6028,7 +6031,7 @@ and corresponding effects."
       (let ((byte-optimize nil)		; do it fast
 	    (byte-compile-warnings nil))
 	(mapc (lambda (x)
-                (unless (subr-native-elisp-p x)
+                (unless (native-comp-function-p x)
 		  (or noninteractive (message "compiling %s..." x))
 		  (byte-compile x)
 		  (or noninteractive (message "compiling %s...done" x))))

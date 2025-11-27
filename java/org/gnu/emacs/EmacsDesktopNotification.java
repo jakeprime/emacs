@@ -1,6 +1,6 @@
 /* Communication module for Android terminals.  -*- c-file-style: "GNU" -*-
 
-Copyright (C) 2023-2024 Free Software Foundation, Inc.
+Copyright (C) 2023-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -83,7 +83,7 @@ public final class EmacsDesktopNotification
      notification.  */
   public final String[] actions, titles;
 
-  /* Delay in miliseconds after which this notification should be
+  /* Delay in milliseconds after which this notification should be
      automatically dismissed.  */
   public final long delay;
 

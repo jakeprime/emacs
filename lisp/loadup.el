@@ -1,6 +1,6 @@
-;;; loadup.el --- load up standardly loaded Lisp files for Emacs  -*- lexical-binding: t; -*-
+;;; loadup.el --- load up always-loaded Lisp files for Emacs  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1985-1986, 1992, 1994, 2001-2024 Free Software
+;; Copyright (C) 1985-1986, 1992, 1994, 2001-2025 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -344,7 +344,8 @@
       (when (eq system-type 'windows-nt)
         (load "w32-fns")
         (load "ls-lisp")
-        (load "dos-w32"))))
+        (load "dos-w32"))
+      (load "touch-screen")))
 (if (eq system-type 'ms-dos)
     (progn
       (load "dos-w32")
@@ -369,6 +370,7 @@
 (if (featurep 'pgtk)
     (progn
       (load "pgtk-dnd")
+      (load "touch-screen")
       (load "term/common-win")
       (load "term/pgtk-win")))
 (if (fboundp 'x-create-frame)

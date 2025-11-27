@@ -1,6 +1,6 @@
 ;;; peg-tests.el --- Tests of PEG parsers            -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008-2024  Free Software Foundation, Inc.
+;; Copyright (C) 2008-2025 Free Software Foundation, Inc.
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -180,6 +180,20 @@ resp. succeeded instead of signaling an error."
     (should (eobp)))
   )
 
+(define-peg-ruleset peg-test-myrules
+  (sign  () (or "+" "-" ""))
+  (digit () [0-9])
+  (nat   () digit (* digit))
+  (int   () sign digit (* digit))
+  (float () int "." nat))
+
+(ert-deftest peg-test-ruleset ()
+  (with-peg-rules
+      (peg-test-myrules
+       (complex float "+i" float))
+    (should (peg-parse-string nat "123" t))
+    (should (not (peg-parse-string nat "home" t)))))
+
 ;;; Examples:
 
 ;; peg-ex-recognize-int recognizes integers.  An integer begins with a
@@ -199,7 +213,7 @@ resp. succeeded instead of signaling an error."
 
 ;; peg-ex-parse-int recognizes integers and computes the corresponding
 ;; value.  The grammar is the same as for `peg-ex-recognize-int'
-;; augmented with parsing actions.  Unfortunaletly, the actions add
+;; augmented with parsing actions.  Unfortunately, the actions add
 ;; quite a bit of clutter.
 ;;
 ;; The actions for the sign rule push -1 on the stack for a minus sign

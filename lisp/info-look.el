@@ -1,6 +1,6 @@
 ;;; info-look.el --- major-mode-sensitive Info index lookup facility -*- lexical-binding: t -*-
 
-;; Copyright (C) 1995-1999, 2001-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1995-1999, 2001-2025 Free Software Foundation, Inc.
 
 ;; Author: Ralph Schleicher <rs@ralph-schleicher.de>
 ;; Keywords: help languages
@@ -30,6 +30,8 @@
 ;; Scheme: https://groups.csail.mit.edu/mac/ftpdir/scm/r5rs.info.tar.gz
 ;; LaTeX: https://mirrors.ctan.org/info/latex2e-help-texinfo/latex2e.texi
 ;;  (or CTAN mirrors)
+;; Python: https://www.python.org/ftp/python/doc/
+;; SICP: https://github.com/webframp/sicp-info
 
 ;; Traditionally, makeinfo quoted `like this', but version 5 and later
 ;; quotes 'like this' or ‘like this’.  Doc specs with patterns
@@ -327,8 +329,11 @@ string of `info-lookup-alist'.
 If optional argument QUERY is non-nil, query for the help mode."
   (let* ((mode (cond (query
 		      (info-lookup-change-mode topic))
-		     ((info-lookup->mode-value topic (info-lookup-select-mode))
-		      info-lookup-mode)
+		     ((when-let
+                          ((info (info-lookup->mode-value
+                                  topic (info-lookup-select-mode))))
+                        (info-lookup--expand-info info))
+                      info-lookup-mode)
 		     ((info-lookup-change-mode topic))))
 	 (completions (info-lookup->completions topic mode))
 	 (default (info-lookup-guess-default topic mode))
@@ -372,12 +377,13 @@ If optional argument QUERY is non-nil, query for the help mode."
 				  (cons (symbol-name mode-spec) mode-spec)))
 			      (info-lookup->topic-value topic)))
 	 (mode (completing-read
-		(format "Use %s help mode: " topic)
+		(format "Major mode whose manuals to search for this %s: "
+                        topic)
 		completions nil t nil 'info-lookup-history)))
     (or (setq mode (cdr (assoc mode completions)))
-	(error "No %s help available" topic))
+	(error "No manuals available for %s" topic))
     (or (info-lookup->mode-value topic mode)
-	(error "No %s help available for `%s'" topic mode))
+	(error "The manuals of `%s' have no %s help" mode topic))
     (setq info-lookup-mode mode)))
 
 (defun info-lookup--item-to-mode (item mode)
@@ -404,9 +410,6 @@ If SAME-WINDOW, reuse the current window.  If nil, pop to a
 different window."
   (or mode (setq mode (info-lookup-select-mode)))
   (setq mode (info-lookup--item-to-mode item mode))
-  (if-let ((info (info-lookup->mode-value topic mode)))
-      (info-lookup--expand-info info)
-    (error "No %s help available for `%s'" topic mode))
   (let* ((completions (info-lookup->completions topic mode))
          (ignore-case (info-lookup->ignore-case topic mode))
          (entry (or (assoc (if ignore-case (downcase item) item) completions)
@@ -1081,6 +1084,7 @@ Return nil if there is nothing appropriate in the buffer near point."
    ("srecode" "Index")
    ("tramp" "Variable Index" "Function Index")
    ("url" "Variable Index" "Function Index")
+   ("use-package" "Index")
    ("vhdl" "(vhdl-mode)Variable Index" "(vhdl-mode)Command Index")
    ("viper" "Variable Index" "Function Index")
    ("vtable" "Index")

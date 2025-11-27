@@ -1,6 +1,6 @@
 /* X Communication module for terminals which understand the X protocol.
 
-Copyright (C) 1986, 1988, 1993-1994, 1996, 1999-2024 Free Software
+Copyright (C) 1986, 1988, 1993-1994, 1996, 1999-2025 Free Software
 Foundation, Inc.
 
 Author: Jon Arnold
@@ -1607,6 +1607,7 @@ create_and_show_popup_menu (struct frame *f, widget_value *first_wv,
 
    For menu bars, we use numbers starting at 0, counted in
    next_menubar_widget_id.  */
+extern LWLIB_ID widget_id_tick; /* FIXME: Move this to a .h file.  */
 LWLIB_ID widget_id_tick;
 
 static void

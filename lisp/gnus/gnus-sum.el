@@ -1,6 +1,6 @@
 ;;; gnus-sum.el --- summary mode commands for Gnus  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1996-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2025 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: news
@@ -8958,7 +8958,7 @@ The difference between N and the number of articles fetched is returned."
 	    (widen))
 	(setq ref
               ;; It's not the current article, or we altered the header,
-              ;; so we use whats in the header vector.
+              ;; so we use what's in the header vector.
 	      (mail-header-references header)))
       (if (and ref
 	       (not (equal ref "")))

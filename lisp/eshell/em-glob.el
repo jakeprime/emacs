@@ -1,6 +1,6 @@
 ;;; em-glob.el --- extended file name globbing  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2025 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 
@@ -53,7 +53,7 @@
 (require 'esh-module)
 (require 'esh-util)
 
-;;;###autoload
+;;;###esh-module-autoload
 (progn
 (defgroup eshell-glob nil
   "This module provides extended globbing syntax, similar what is used
@@ -348,7 +348,7 @@ regular expressions, and these cannot support the above constructs."
         ;; always be sure if the "~" is a home directory reference or
         ;; part of a glob (e.g. if the argument was assembled from
         ;; variables).
-        glob
+        (if eshell-glob-splice-results (list glob) glob)
       (unwind-protect
           (apply #'eshell-glob-entries globs)
         (if message-shown
@@ -417,9 +417,4 @@ directories and files."
         (eshell-glob-entries rdir globs only-dirs)))))
 
 (provide 'em-glob)
-
-;; Local Variables:
-;; generated-autoload-file: "esh-groups.el"
-;; End:
-
 ;;; em-glob.el ends here

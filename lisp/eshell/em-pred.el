@@ -1,6 +1,6 @@
 ;;; em-pred.el --- argument predicates and modifiers (ala zsh)  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2025 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 
@@ -48,7 +48,7 @@
 
 (require 'esh-mode)
 
-;;;###autoload
+;;;###esh-module-autoload
 (progn
 (defgroup eshell-pred nil
   "This module allows for predicates to be applied to globbing
@@ -417,7 +417,7 @@ delimiter.
 If CHAINED-P is true, then another delimited modifier argument
 will immediately follow this one.  In this case, when the opening
 and closing delimiters are the same, update point to be just
-before the closing delimiter. This allows modifiers like
+before the closing delimiter.  This allows modifiers like
 `:s/match/repl' to work as expected."
   (when-let* ((open (char-after))
               (close (cdr (assoc open eshell-pred-delimiter-pairs)))
@@ -576,9 +576,4 @@ If INVERT-P is non-nil, include only members not matching a regexp."
        lst))))
 
 (provide 'em-pred)
-
-;; Local Variables:
-;; generated-autoload-file: "esh-groups.el"
-;; End:
-
 ;;; em-pred.el ends here

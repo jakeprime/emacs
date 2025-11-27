@@ -1,6 +1,6 @@
 /* Lisp object printing and output streams.
 
-Copyright (C) 1985-2024 Free Software Foundation, Inc.
+Copyright (C) 1985-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -2031,6 +2031,11 @@ print_vectorlike_unreadable (Lisp_Object obj, Lisp_Object printcharfun,
       if (!treesit_node_uptodate_p (obj))
 	{
 	  print_c_string ("-outdated>", printcharfun);
+	  return;
+	}
+      if (!treesit_node_buffer_live_p (obj))
+	{
+	  print_c_string ("-in-killed-buffer>", printcharfun);
 	  return;
 	}
       printchar (' ', printcharfun);

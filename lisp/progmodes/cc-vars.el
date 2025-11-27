@@ -1,6 +1,6 @@
 ;;; cc-vars.el --- user customization variables for CC Mode -*- lexical-binding: t -*-
 
-;; Copyright (C) 1985, 1987, 1992-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 1987, 1992-2025 Free Software Foundation, Inc.
 
 ;; Authors:    2002- Alan Mackenzie
 ;;             1998- Martin Stjernholm
@@ -286,6 +286,7 @@ This has effect only for languages in which `c-dollar-in-ids' is
 non-nil, e.g.  C, C++, Objective C.  It covers languages where
 \"$\" is permitted in ids \"informally\", but only by some compilers."
   :type 'boolean
+  :version "30.1"
   :group 'c)
 
 (defcustom-c-stylevar c-basic-offset 4

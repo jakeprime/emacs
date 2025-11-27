@@ -1,6 +1,6 @@
 @c -*-texinfo-*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990--1995, 1998--1999, 2001--2024 Free Software
+@c Copyright (C) 1990--1995, 1998--1999, 2001--2025 Free Software
 @c Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @node Files
@@ -149,9 +149,10 @@ The function returns an existing buffer if there is one; otherwise it
 creates a new buffer and reads the file into it.  When
 @code{find-file-noselect} uses an existing buffer, it first verifies
 that the file has not changed since it was last visited or saved in
-that buffer.  If the file has changed, this function asks the user
-whether to reread the changed file.  If the user says @samp{yes}, any
-edits previously made in the buffer are lost.
+that buffer (unless @var{nowarn} is non-@code{nil}, see below).  If the
+file has changed, this function asks the user whether to reread the
+changed file.  If the user says @samp{yes}, any edits previously made in
+the buffer are lost.
 
 Reading the file involves decoding the file's contents (@pxref{Coding
 Systems}), including end-of-line conversion, and format conversion
@@ -163,7 +164,8 @@ This function displays warning or advisory messages in various peculiar
 cases, unless the optional argument @var{nowarn} is non-@code{nil}.  For
 example, if it needs to create a buffer, and there is no file named
 @var{filename}, it displays the message @samp{(New file)} in the echo
-area, and leaves the buffer empty.
+area, and leaves the buffer empty.  The verification of the file's last
+change is also bypassed if @var{nowarn} is non-@code{nil}.
 
 The @code{find-file-noselect} function normally calls
 @code{after-find-file} after reading the file (@pxref{Subroutines of
@@ -1299,7 +1301,8 @@ and modification.
 This function returns @code{t} if the file @var{filename1} is
 newer than file @var{filename2}.  If @var{filename1} does not
 exist, it returns @code{nil}.  If @var{filename1} does exist, but
-@var{filename2} does not, it returns @code{t}.
+@var{filename2} does not, it returns @code{t}.  Otherwise, it compares
+the times of last modification of the files.
 
 In the following example, assume that the file @file{aug-19} was written
 on the 19th, @file{aug-20} was written on the 20th, and the file
@@ -2458,6 +2461,14 @@ results in any way.
 This is almost the same as using @code{concat}, but @var{dirname} (and
 the non-final components) may or may not end with slash characters,
 and this function will not double those characters.
+
+In most cases, one or more calls to @code{expand-file-name} (@pxref{File
+Name Expansion} are better suited for the job of generating file names
+with leading directories than this function.  Use this function only if
+some of the special features of @code{expand-file-name} get in the way
+of what your program needs to do.  For example, the special handling by
+@code{expand-file-name} of @file{~}, @file{~@var{user}}, and @code{nil},
+or the removal of @file{.} and @file{..} might not be what you want.
 @end defun
 
   To convert a directory name to its abbreviation, use this
@@ -2708,7 +2719,7 @@ file names (@pxref{Magic File Names}).
 
 @defmac file-name-unquote name
 This macro removes the quotation prefix @samp{/:} from the file
-@var{name}, if any. If @var{name} is a remote file name, the local
+@var{name}, if any.  If @var{name} is a remote file name, the local
 part of @var{name} is unquoted.
 @end defmac
 
@@ -2740,7 +2751,7 @@ This function creates a temporary file and returns its name.  Emacs
 creates the temporary file's name by adding to @var{prefix} some
 random characters that are different in each Emacs job.  The result is
 guaranteed to be a newly created file, containing @var{text} if that's
-given as a string and empty otherwise. On MS-DOS, this function can
+given as a string and empty otherwise.  On MS-DOS, this function can
 truncate @var{prefix} to fit into the 8+3 file-name limits.  If
 @var{prefix} is a relative file name, it is expanded against
 @code{temporary-file-directory}.
@@ -3226,11 +3237,11 @@ for the sake of dired.  However, the normally equivalent short
 as any other option.
 @end defun
 
-@defvar insert-directory-program
-This variable's value is the program to run to generate a directory listing
-for the function @code{insert-directory}.  It is ignored on systems
-which generate the listing with Lisp code.
-@end defvar
+@defopt insert-directory-program
+This user option specifies the program to run to generate a directory
+listing for the function @code{insert-directory}.  It is ignored on
+systems that generate the listing with Lisp code.
+@end defopt
 
 @node Create/Delete Dirs
 @section Creating, Copying and Deleting Directories
@@ -3624,10 +3635,18 @@ ensure this principle is valid.
 
 @var{identification} specifies which part of the identifier shall be
 returned as string.  @var{identification} can be the symbol
-@code{method}, @code{user} or @code{host}; any other value is handled
-like @code{nil} and means to return the complete identifier string.
-In the example above, the remote @code{user} identifier string would
-be @code{root}.
+@code{method}, @code{user}, @code{host} or @code{localname}; any other
+value is handled like @code{nil} and means to return the complete
+identifier string.  In the example above, the remote @code{user}
+identifier string would be @code{root}.
+
+If the remote @var{file} does not contain a method, a user name, or a
+host name, the respective default value is returned.  The string
+returned for @var{identification} @code{localname} can differ depending
+on whether there is an existing connection.  File name handler specific
+implementations could support further @var{identification} symbols;
+@xref{Top, Tramp, Tramp, tramp}, for example, knows also the @code{hop}
+symbol.
 
 If @var{connected} is non-@code{nil}, this function returns @code{nil}
 even if @var{filename} is remote, if Emacs has no network connection

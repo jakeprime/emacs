@@ -1,6 +1,6 @@
 ;;; python.el --- Python's flying circus support for Emacs -*- lexical-binding: t -*-
 
-;; Copyright (C) 2003-2024 Free Software Foundation, Inc.
+;; Copyright (C) 2003-2025 Free Software Foundation, Inc.
 
 ;; Author: Fabián E. Gallina <fgallina@gnu.org>
 ;; URL: https://github.com/fgallina/python.el
@@ -233,23 +233,6 @@
 ;; `python-imenu-format-parent-item-jump-label-function' variables for
 ;; changing the way labels are formatted in the tree version.
 
-;; If you used python-mode.el you may miss auto-indentation when
-;; inserting newlines.  To achieve the same behavior you have two
-;; options:
-
-;; 1) Enable the minor-mode `electric-indent-mode' (enabled by
-;;    default) and use RET.  If this mode is disabled use
-;;    `newline-and-indent', bound to C-j.
-
-;; 2) Add the following hook in your .emacs:
-
-;; (add-hook 'python-mode-hook
-;;   (lambda ()
-;;     (define-key python-mode-map "\C-m" 'newline-and-indent)))
-
-;; I'd recommend the first one since you'll get the same behavior for
-;; all modes out-of-the-box.
-
 ;; Flymake: A Flymake backend, using the pyflakes program by default,
 ;; is provided.  You can also use flake8 or pylint by customizing
 ;; `python-flymake-command'.
@@ -425,7 +408,7 @@ To customize the Python interpreter for interactive use, modify
   "Keymap for `python-mode'.")
 
 (defvar python-ts-mode-map (copy-keymap python-mode-map)
-  "Keymap for `(copy-keymap python-mode-map)'.")
+  "Keymap for `python-ts-mode'.")
 
 
 ;;; Python specialized rx
@@ -1140,8 +1123,8 @@ fontified."
 For example, Lvl1 | Lvl2[Lvl3[Lvl4[Lvl5 | None]], Lvl2].  This
 structure is represented via nesting binary_operator and
 subscript nodes.  This function iterates over all levels and
-highlight identifier nodes. If TYPE-REGEX is not nil fontify type
-identifier only if it matches against TYPE-REGEX. NODE is the
+highlight identifier nodes.  If TYPE-REGEX is not nil fontify type
+identifier only if it matches against TYPE-REGEX.  NODE is the
 binary_operator node.  OVERRIDE is the override flag described in
 `treesit-font-lock-rules'.  START and END mark the region to be
 fontified."
@@ -1819,7 +1802,7 @@ possibilities can be narrowed to specific indentation points."
         (`(:after-block-end . ,start)
          ;; Subtract one indentation level.
          (goto-char start)
-         (- (current-indentation) python-indent-offset))
+         (max 0 (- (current-indentation) python-indent-offset)))
         (`(:at-dedenter-block-start . ,_)
          ;; List all possible indentation levels from opening blocks.
          (let ((opening-block-start-points
@@ -3030,11 +3013,11 @@ machine then modifies `tramp-remote-process-environment' and
                  (tramp-dissect-file-name default-directory 'noexpand)))))
     (if vec
         (python-shell--tramp-with-environment vec extraenv bodyfun)
-      (let ((process-environment
-             (append extraenv process-environment))
-            (exec-path
-             ;; FIXME: This is still Python-specific.
-             (python-shell-calculate-exec-path)))
+      (cl-letf (((default-value 'process-environment)
+		 (append extraenv process-environment))
+		((default-value 'exec-path)
+		 ;; FIXME: This is still Python-specific.
+		 (python-shell-calculate-exec-path)))
         (funcall bodyfun)))))
 
 (defun python-shell--tramp-with-environment (vec extraenv bodyfun)
@@ -3104,8 +3087,13 @@ detection and just returns nil."
       (let* ((code (concat
                     "import sys\n"
                     "ps = [getattr(sys, 'ps%s' % i, '') for i in range(1,4)]\n"
+                    "try:\n"
+                    "    import json\n"
+                    "    ps_json = '\\n' + json.dumps(ps)\n"
+                    "except ImportError:\n"
                     ;; JSON is built manually for compatibility
-                    "ps_json = '\\n[\"%s\", \"%s\", \"%s\"]\\n' % tuple(ps)\n"
+                    "    ps_json = '\\n[\"%s\", \"%s\", \"%s\"]\\n' % tuple(ps)\n"
+                    "\n"
                     "print (ps_json)\n"
                     "sys.exit(0)\n"))
              (interpreter python-shell-interpreter)
@@ -3168,7 +3156,7 @@ detection and just returns nil."
             "Or alternatively in:\n"
             "  + `python-shell-prompt-input-regexps'\n"
             "  + `python-shell-prompt-output-regexps'")))
-        prompts))))
+        (mapcar #'ansi-color-filter-apply prompts)))))
 
 (defun python-shell-prompt-validate-regexps ()
   "Validate all user provided regexps for prompts.
@@ -3540,11 +3528,13 @@ eventually provide a shell."
 (defconst python-shell-setup-code
   "\
 try:
-    import tty
+    import termios
 except ImportError:
     pass
 else:
-    tty.setraw(0)"
+    attr = termios.tcgetattr(0)
+    attr[3] &= ~termios.ECHO
+    termios.tcsetattr(0, termios.TCSADRAIN, attr)"
   "Code used to setup the inferior Python processes.")
 
 (defconst python-shell-eval-setup-code
@@ -4544,6 +4534,9 @@ def __PYTHON_EL_native_completion_setup():
             readline.parse_and_bind('tab: complete')
             # Require just one tab to send output.
             readline.parse_and_bind('set show-all-if-ambiguous on')
+            # Avoid ANSI escape characters in the output
+            readline.parse_and_bind('set colored-completion-prefix off')
+            readline.parse_and_bind('set colored-stats off')
             # Avoid replacing common prefix with ellipsis.
             readline.parse_and_bind('set completion-prefix-display-length 0')
 
@@ -5385,8 +5378,8 @@ be added to `python-mode-skeleton-abbrev-table'."
               (format "Insert %s statement." name))
          ,@skel))))
 
-(define-abbrev-table 'python-mode-abbrev-table ()
-  "Abbrev table for Python mode."
+(define-abbrev-table 'python-base-mode-abbrev-table ()
+  "Abbrev table for Python modes."
   :parents (list python-mode-skeleton-abbrev-table))
 
 (defmacro python-define-auxiliary-skeleton (name &optional doc &rest skel)
@@ -5607,8 +5600,6 @@ See `python-check-command' for the default."
                 doc = '{objtype} {name}{args}'.format(
                     objtype=objtype, name=name, args=args
                 )
-        else:
-            doc = doc.splitlines()[0]
     except:
         doc = ''
     return doc"
@@ -5722,7 +5713,8 @@ Interactively, prompt for symbol."
 (defun python-hideshow-forward-sexp-function (_arg)
   "Python specific `forward-sexp' function for `hs-minor-mode'.
 Argument ARG is ignored."
-  (python-nav-end-of-block))
+  (python-nav-end-of-block)
+  (end-of-line))
 
 (defun python-hideshow-find-next-block (regexp maxp comments)
   "Python specific `hs-find-next-block' function for `hs-minor-mode'.
@@ -6921,6 +6913,12 @@ argument, restrict the suggestions to imports defining the symbol
 at point.  If there is only one such suggestion, act without
 asking.
 
+If the buffer does not belong to a project, the import statement is
+searched under the buffer's default directory.  For example, if the file
+is located directly under the home directory, all files under the home
+directory will be searched.  Please note that this can take a long time
+and may appear to hang.
+
 When calling from Lisp, use a non-nil NAME to restrict the
 suggestions to imports defining NAME."
   (interactive (list (when current-prefix-arg (thing-at-point 'symbol))))
@@ -6965,7 +6963,17 @@ asking."
 
 ;;;###autoload
 (defun python-fix-imports ()
-  "Add missing imports and remove unused ones from the current buffer."
+  "Add missing imports and remove unused ones from the current buffer.
+
+If there are missing imports, ask for an import statement using all
+imports found in the current project as suggestions.  If there is only
+one such suggestion, act without asking.
+
+If the buffer does not belong to a project, the import statement is
+searched under the buffer's default directory.  For example, if the file
+is located directly under the home directory, all files under the home
+directory will be searched.  Please note that this can take a long time
+and may appear to hang."
   (interactive)
   (let ((buffer (current-buffer))
         undefined unused add remove)

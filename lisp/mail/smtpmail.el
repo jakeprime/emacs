@@ -1,6 +1,6 @@
 ;;; smtpmail.el --- simple SMTP protocol (RFC 821) for sending mail  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1995-1996, 2001-2024 Free Software Foundation, Inc.
+;; Copyright (C) 1995-1996, 2001-2025 Free Software Foundation, Inc.
 
 ;; Author: Tomoji Kagatani <kagatani@rbc.ncl.omron.co.jp>
 ;; Maintainer: emacs-devel@gnu.org
@@ -639,11 +639,21 @@ USER and PASSWORD should be non-nil."
 
 (cl-defmethod smtpmail-try-auth-method
   (process (_mech (eql 'xoauth2)) user password)
-  (smtpmail-command-or-throw
-   process
-   (concat "AUTH XOAUTH2 "
-           (base64-encode-string
-            (concat "user=" user "\1auth=Bearer " password "\1\1") t))))
+  (let ((ret (smtpmail-command-or-throw
+              process
+              (concat "AUTH XOAUTH2 "
+                      (base64-encode-string
+                       (concat "user=" user "\1auth=Bearer " password "\1\1")
+                       t)))))
+    (if (eq (car ret) 334)
+        ;; When a server returns 334 server challenge, it usually means
+        ;; the credentials it received were wrong (e.g. was an actual
+        ;; password instead of an access token).  In such a case, we
+        ;; should return a string with 535 to indicate a failure so that
+        ;; smtpmail will try other authentication mechanisms.  See also
+        ;; https://debbugs.gnu.org/78366.
+        (throw 'done "535 5.7.8 Authentication credentials invalid")
+      ret)))
 
 (defun smtpmail-response-code (string)
   (when string

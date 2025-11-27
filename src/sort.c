@@ -1,6 +1,6 @@
 /* Timsort for sequences.
 
-Copyright (C) 2022-2024 Free Software Foundation, Inc.
+Copyright (C) 2022-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -1130,7 +1130,7 @@ tim_sort (Lisp_Object predicate, Lisp_Object keyfunc,
       keys[i] = call1 (keyfunc, seq[i]);
 
   /* FIXME: This is where we would check the keys for interesting
-     properties for more optimised comparison (such as all being fixnums
+     properties for more optimized comparison (such as all being fixnums
      etc).  */
 
   /* March over the array once, left to right, finding natural runs,
