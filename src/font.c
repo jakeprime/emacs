@@ -1,6 +1,6 @@
 /* font.c -- "Font" primitives.
 
-Copyright (C) 2006-2025 Free Software Foundation, Inc.
+Copyright (C) 2006-2026 Free Software Foundation, Inc.
 Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011
   National Institute of Advanced Industrial Science and Technology (AIST)
   Registration Number H13PRO009
@@ -418,8 +418,24 @@ font_style_to_value (enum font_property_index prop, Lisp_Object val,
       eassert (len < 255);
       elt = make_vector (2, make_fixnum (100));
       ASET (elt, 1, val);
-      ASET (font_style_table, prop - FONT_WEIGHT_INDEX,
-	    CALLN (Fvconcat, table, make_vector (1, elt)));
+      Lisp_Object new_table = CALLN (Fvconcat, table, make_vector (1, elt));
+      /* Update the corresponding variable with the new value of the
+         modified slot of font_style_table.  */
+      switch (prop)
+	{
+	case FONT_WEIGHT_INDEX:
+	  Vfont_weight_table = new_table;
+	  break;
+	case FONT_SLANT_INDEX:
+	  Vfont_slant_table = new_table;
+	  break;
+	case FONT_WIDTH_INDEX:
+	  Vfont_width_table = new_table;
+	  break;
+	default:
+	  break;
+	}
+      ASET (font_style_table, prop - FONT_WEIGHT_INDEX, new_table);
       return (100 << 8) | (i << 4);
     }
   else
@@ -1627,15 +1643,30 @@ font_parse_fcname (char *name, ptrdiff_t len, Lisp_Object font)
 	{
 	  bool decimal = 0, size_found = 1;
 	  for (q = p + 1; *q && *q != ':'; q++)
-	    if (! c_isdigit (*q))
-	      {
-		if (*q != '.' || decimal)
-		  {
-		    size_found = 0;
-		    break;
-		  }
-		decimal = 1;
-	      }
+	    {
+#ifdef HAVE_NTGUI
+	      /* MS-Windows has several CJK fonts whose name ends in
+                 "-ExtB".  It also has fonts whose names end in "-R" or
+                 "-B", and one font whose name ends in "-SB".  */
+	      if (q == p + 1 && (strncmp (q, "ExtB", 4) == 0
+				 || strncmp (q, "R", 1) == 0
+				 || strncmp (q, "B", 1) == 0
+				 || strncmp (q, "SB", 2) == 0))
+		{
+		  size_found = 0;
+		  break;
+		}
+#endif
+	      if (! c_isdigit (*q))
+		{
+		  if (*q != '.' || decimal)
+		    {
+		      size_found = 0;
+		      break;
+		    }
+		  decimal = 1;
+		}
+	    }
 	  if (size_found)
 	    {
 	      family_end = p;
@@ -2000,6 +2031,15 @@ font_parse_family_registry (Lisp_Object family, Lisp_Object registry, Lisp_Objec
       len = SBYTES (family);
       p0 = SSDATA (family);
       p1 = strchr (p0, '-');
+#ifdef HAVE_NTGUI
+      /* MS-Windows has fonts whose family name ends in "-ExtB" and
+         other suffixes which include a hyphen.  */
+      if (p1 && (strcmp (p1, "-ExtB") == 0
+		 || strcmp (p1, "-R") == 0
+		 || strcmp (p1, "-B") == 0
+		 || strcmp (p1, "-SB") == 0))
+	p1 = NULL;
+#endif
       if (p1)
 	{
 	  if ((*p0 != '*' && p1 - p0 > 0)
@@ -2230,7 +2270,7 @@ font_sort_entities (Lisp_Object list, Lisp_Object prefer,
       maxlen = ASIZE (vec);
     }
 
-  data = SAFE_ALLOCA (maxlen * sizeof *data);
+  SAFE_NALLOCA (data, 1, maxlen);
   best_score = 0xFFFFFFFF;
   best_entity = Qnil;
 
@@ -2448,6 +2488,8 @@ font_match_p (Lisp_Object spec, Lisp_Object font)
 	      val2 = XCDR (val2);
 	      if (CONSP (val2))
 		{
+		  if (! FONT_OBJECT_P (font))
+		    return 0;
 		  /* All characters in the list must be supported.  */
 		  for (; CONSP (val2); val2 = XCDR (val2))
 		    {
@@ -2460,6 +2502,8 @@ font_match_p (Lisp_Object spec, Lisp_Object font)
 		}
 	      else if (VECTORP (val2))
 		{
+		  if (! FONT_OBJECT_P (font))
+		    return 0;
 		  /* At most one character in the vector must be supported.  */
 		  for (i = 0; i < ASIZE (val2); i++)
 		    {
@@ -3979,8 +4023,10 @@ valid font property name listed below:
 
 `:family', `:weight', `:slant', `:width'
 
-They are the same as face attributes of the same name.  See
-`set-face-attribute'.
+They are the same as face attributes of the same name (see
+`set-face-attribute'), except that `:family' could also be a symbol,
+and the value of the other three properties can also be a number,
+the numerical value of the style.
 
 `:foundry'
 
@@ -4346,12 +4392,15 @@ See also `font-get' for KEYs that have special meanings.  */)
 }
 
 DEFUN ("list-fonts", Flist_fonts, Slist_fonts, 1, 4, 0,
-       doc: /* List available fonts matching FONT-SPEC on the current frame.
-Optional 2nd argument FRAME specifies the target frame.
+       doc: /* List available fonts matching FONT-SPEC on FRAME.
+If FRAME is nil or omitted, it defaults to the selected frame,
 Optional 3rd argument NUM, if non-nil, limits the number of returned fonts.
 Optional 4th argument PREFER, if non-nil, is a font-spec to
 control the order of the returned list.  Fonts are sorted by
-how close they are to PREFER.  */)
+how close they are to PREFER.
+
+The return value is a list of font-entity objects describing available
+fonts which match FONT-SPEC.  */)
   (Lisp_Object font_spec, Lisp_Object frame, Lisp_Object num, Lisp_Object prefer)
 {
   struct frame *f = decode_live_frame (frame);
@@ -5953,6 +6002,9 @@ This variable cannot be set; trying to do so will signal an error.  */);
   Vfont_width_table = BUILD_STYLE_TABLE (width_table);
   make_symbol_constant (intern_c_string ("font-width-table"));
 
+  /* Because the above 3 variables are slots in the vector we create
+     below, and because that vector is staticpro'd, we don't explicitly
+     staticpro the variables, to avoid wasting slots in staticvec[].  */
   staticpro (&font_style_table);
   font_style_table = CALLN (Fvector, Vfont_weight_table, Vfont_slant_table,
 			    Vfont_width_table);

@@ -1,7 +1,7 @@
 		    Building and Installing Emacs on MS-Windows
                           using the MSYS and MinGW tools
 
-  Copyright (C) 2013-2025 Free Software Foundation, Inc.
+  Copyright (C) 2013-2026 Free Software Foundation, Inc.
   See the end of the file for license conditions.
 
 The MSYS/MinGW build described here is supported on versions of
@@ -54,6 +54,10 @@ build should run on Windows 9X and newer systems).
 
        ./configure --prefix=/d/usr/emacs --enable-checking='yes,glyphs' \
          CFLAGS='-O0 -g3'
+
+     (For ordinary production builds, we recommend not to use -O3 or -Os
+     in CFLAGS, as those could sometimes produce bad or suboptimal code,
+     especially in major new releases of GCC.)
 
   3. After the configure script finishes, it should display the
      resulting configuration.  After that, type
@@ -137,9 +141,9 @@ build should run on Windows 9X and newer systems).
 
   A nice installer, called mingw-get, is available for those who don't
   like to mess with manual installations.  You can download it from
-  here:
+  the "Wayback Machine", here:
 
-    https://osdn.net/projects/mingw/releases
+    https://web.archive.org/web/20210410172202/https://osdn.net/projects/mingw/releases/
 
   (This installer only supports packages downloaded from the MinGW
   site; for the rest you will still need the manual method.)
@@ -201,9 +205,9 @@ build should run on Windows 9X and newer systems).
 
   You will need to install the MinGW port of GCC and Binutils, and the
   MinGW runtime and Windows API distributions, to compile Emacs.  You
-  can find these on the MinGW download/Base page:
+  can find these on the MinGW download page:
 
-    https://osdn.net/projects/mingw/releases
+    https://web.archive.org/web/20210410172202/https://osdn.net/projects/mingw/releases/
 
   In general, install the latest stable versions of the following
   MinGW packages from that page: gcc, binutils, mingw-rt, w32api.  You
@@ -515,7 +519,6 @@ build should run on Windows 9X and newer systems).
        Does Emacs support Xwidgets?                            no
        Does Emacs have threading support in lisp?              yes
        Does Emacs support the portable dumper?                 yes
-       Does Emacs support the legacy unexec dumping?           no
        Which dumping strategy does Emacs use?                  pdumper
 
   You are almost there, hang on.

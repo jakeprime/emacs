@@ -1,6 +1,6 @@
 ;;; print-tests.el --- tests for src/print.c         -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2014-2025 Free Software Foundation, Inc.
+;; Copyright (C) 2014-2026 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -130,6 +130,7 @@ otherwise, use a different charset."
                      "abc\n")))
   (let ((standard-output
          (with-current-buffer (get-buffer-create "*terpri-test*")
+           (erase-buffer)
            (insert "--------")
            (point-max-marker))))
     (should     (terpri nil t))
@@ -338,10 +339,13 @@ otherwise, use a different charset."
 (print-tests--deftest print-circle ()
   (let ((x '(#1=(a . #1#) #1#)))
     (let ((print-circle nil))
-      (should (string-match "\\`((a . #[0-9]) (a . #[0-9]))\\'"
+      (should (string-match "\\`((a . #[0-9]+) (a . #[0-9]+))\\'"
                             (print-tests--prin1-to-string x))))
     (let ((print-circle t))
-      (should (equal "(#1=(a . #1#) #1#)" (print-tests--prin1-to-string x))))))
+      (should (equal "(#1=(a . #1#) #1#)" (print-tests--prin1-to-string x)))))
+  (let ((print-circle t))
+    (should (equal (print-tests--prin1-to-string '([] "" [] ""))
+                   "([] \"\" [] \"\")"))))
 
 (print-tests--deftest print-circle-2 ()
    ;; Bug#31146.
@@ -355,7 +359,9 @@ otherwise, use a different charset."
 (print-tests--deftest error-message-string-circular ()
   (let ((err (list 'error)))
     (setcdr err err)
-    (should-error (error-message-string err) :type 'circular-list)))
+    (should-error (error-message-string err) :type 'circular-list)
+    ;; check that prin1-to-string-buffer is cleared (bug#78842)
+    (should (equal "37.0" (prin1-to-string 37.0)))))
 
 (print-tests--deftest print-hash-table-test ()
   (should
@@ -414,8 +420,10 @@ otherwise, use a different charset."
 
 (ert-deftest test-dots ()
   (should (equal (prin1-to-string 'foo.bar) "foo.bar"))
-  (should (equal (prin1-to-string '.foo) "\\.foo"))
-  (should (equal (prin1-to-string '.foo.) "\\.foo."))
+  (should (equal (prin1-to-string '.foo) ".foo"))
+  (should (equal (prin1-to-string '.foo.) ".foo."))
+  (should (equal (prin1-to-string '.$) "\\.$"))
+  (should (equal (prin1-to-string '\.) "\\."))
   (should (equal (prin1-to-string 'bar?bar) "bar?bar"))
   (should (equal (prin1-to-string '\?bar) "\\?bar"))
   (should (equal (prin1-to-string '\?bar?) "\\?bar?")))
@@ -536,6 +544,71 @@ otherwise, use a different charset."
                   (prin1-to-string (make-marker))))))
       (should (eq callback-buffer buffer))
       (should (equal str "tata"))))
+
+(ert-deftest test-print-number-realloc ()
+  ;; Test for bug#78590.  Note that this may in rare cases crash unfixed
+  ;; Emacs versions.
+  (let ((print-circle t)
+        (print-number-table (make-hash-table))
+        (print-continuous-numbering t)
+        (str "yy")
+        (outstr ""))
+    (garbage-collect)
+    (ignore (make-string 100 ?a))
+    (puthash str (make-string 3 ?x) print-number-table)
+    (prin1 str
+           (lambda (c)
+             (setq outstr (concat outstr (string c)))
+             (garbage-collect)
+             (ignore (make-string 100 ?b))))
+    (should (equal outstr "xxx"))))
+
+(ert-deftest print-unibyte-symbols ()
+  ;; Non-ASCII in unibyte symbols should print as raw bytes.
+  (should (equal (prin1-to-string (make-symbol "a\xff"))
+                 (string-to-multibyte "a\xff")))
+  (should (equal (prin1-to-string (make-symbol "th\303\251"))
+                 (string-to-multibyte "th\303\251"))))
+
+(ert-deftest print-tests--write-char ()
+  (should (equal (with-output-to-string (write-char ?A)) "A"))
+  (let (out)
+    (should (= (write-char ?Z (lambda (c)
+                                (setq out (concat out (string c)))))
+               ?Z))
+    (should (equal out "Z"))))
+
+(ert-deftest print-tests--redirect-debugging-output ()
+  (let ((file (make-temp-file "print-tests-debug")))
+    (unwind-protect
+        (progn
+          (redirect-debugging-output file nil)
+          (external-debugging-output ?A)
+          (external-debugging-output ?B)
+          (redirect-debugging-output nil)
+          (should (equal (with-temp-buffer
+                           (insert-file-contents file)
+                           (buffer-string))
+                         "AB")))
+      (ignore-errors (redirect-debugging-output nil))
+      (ignore-errors (delete-file file)))))
+
+(ert-deftest print-tests--preprocess ()
+  (let* ((x (list 1 2))
+         (obj (list x x))
+         (print-circle t)
+         (print-number-table nil))
+    (print--preprocess obj)
+    (should (hash-table-p print-number-table))
+    (should (> (hash-table-count print-number-table) 0))
+    (should (gethash x print-number-table)))
+  (let* ((x (list 1 2))
+         (obj (list x x))
+         (print-circle nil)
+         (print-number-table (make-hash-table :test 'eq)))
+    (puthash 'sentinel 'value print-number-table)
+    (print--preprocess obj)
+    (should (eq (gethash 'sentinel print-number-table) 'value))))
 
 (provide 'print-tests)
 ;;; print-tests.el ends here

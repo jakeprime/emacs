@@ -1,6 +1,6 @@
 ;;; authors.el --- utility for maintaining Emacs's AUTHORS file  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2000-2025 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2026 Free Software Foundation, Inc.
 
 ;; Author: Gerd Moellmann <gerd@gnu.org>
 ;; Maintainer: emacs-devel@gnu.org
@@ -69,6 +69,7 @@ files.")
     (nil "BlaCk_Void" "alstjr7375@daum\\.net")
     (nil "bug-gnu-emacs@gnu\\.org")  ; mistake
     ("Björn Torkelsson" "Bjorn Torkelsson")
+    ("Boris Buliga" "boris@d12frosted\\.io")
     (nil "brandon\\.irizarry@gmail\\.com")
     ("Brian Fox" "Brian J\\. Fox")
     ("Brian P Templeton" "BT Templeton")
@@ -102,6 +103,7 @@ files.")
     ("Eric M. Ludlam" "Eric Ludlam")
     ("Eric S. Raymond" "Eric Raymond")
     ("Etienne Prud’Homme" "Etienne Prud'Homme")
+    ("Ewan Townshend" "ewan@etown\\.dev")
     ("Fabián Ezequiel Gallina" "Fabian Ezequiel Gallina" "Fabi.n E\\. Gallina")
     (nil "felix.*EmacsWiki")
     (nil "felix\\.dick@web\\.de")
@@ -124,6 +126,7 @@ files.")
     ("Hallvard B. Furuseth" "Hallvard B Furuseth" "Hallvard Furuseth")
     (nil "hokomo@airmail\\.cc" "hokomo")
     ("Hrvoje Nikšić" "Hrvoje Niksic")
+    ("Huang Jing" "rne\\.kou@icloud\\.com" "RadioNoiseE")
     ("Ian Dunn" "^Ian D\\>")
     ;; lisp/org/ChangeLog.1 2010-11-11.
     ("Ignacio Casso" "ignacio\\.decasso@imdea\\.org" "ignaciocasso@hotmail\\.com")
@@ -187,6 +190,7 @@ files.")
     ("Mark D. Baushke" "Mark D Baushke")
     ("Mark E. Shoulson" "Mark Shoulson")
     ("Marko Kohtala" "Kohtala Marko")
+    ("Mattias Roux" "mattias@kojin\\.tech")
     ("Maxim Nikulin" "Max Nikulin")
     ("Agustín Martín" "Agustin Martin" "Agustín Martín Domingo")
     ("Martin Lorentzon" "Martin Lorentzson")
@@ -215,7 +219,7 @@ files.")
     ("Noorul Islam" "Noorul Islam K M")
 ;;;    ("Tetsurou Okazaki" "OKAZAKI Tetsurou") ; FIXME?
     (nil "odanoburu@")
-    ("Xie Qi" "one\\.last\\.kiss@outlook\\.com" "shynur")
+    ("谢骐 Xie Qi" "one\\.last\\.kiss@outlook\\.com" "shynur")
     ("Cao ZhenXiang" "mail@ookami\\.one")
     ("Óscar Fuentes" "Oscar Fuentes")
     (nil "pillule")
@@ -249,6 +253,7 @@ files.")
     ("Rodney J. Whitby" "Rod Whitby")
     ("Roland B. Roberts" "Roland B Roberts" "Roland Roberts")
     ("Ron Schnell" "Ronnie Schnell")
+    ("Rudolf Adamkovič" "rudolf@adamkovic\\.org" "salutis@me\\.com")
     ("Rudolf Schlatte" "Rudi Schlatte")
     ("Rui-Tao Dong" "Rui-Tao Dong ~{6-HpLN~}")
     ("Ryan Thompson" "Ryan .*rct@thompsonclan")
@@ -298,11 +303,13 @@ files.")
     (nil "vjoki@")
     (nil "whatacold@gmail\\.com")
     ("William M. Perry" "Bill Perry")
+    ("William O'Brien" "will\\.08rien@gmail.com")
     ("Włodzimierz Bzyl" "W.*dek Bzyl")
     (nil "xyblor")
     ("Yilkal Argaw" "yilkalargaw" "yilkalargawworkneh@gmail\\.com")
     ("Yoni Rabkin" "Yoni Rabkin Katzenell")
     ("Yoshinori Koseki" "KOSEKI Yoshinori" "小関 吉則")
+    ("Yuhei Kikuchi" "8\\.slashes@gmail\\.com")
     ("Yuzhana Ego" "YugaEgo" "yet@ego\\.team")
     ("Yutaka NIIBE" "NIIBE Yutaka")
     (nil "stardiviner")
@@ -380,7 +387,6 @@ If REALNAME is nil, ignore that author.")
     "nnmaildir\\.el"
     "nnil\\.el"
     "b2m\\.c"
-    "unexhp9k800\\.c"
     "emacsclient\\.1"
     "check-doc-strings")
   "List of regexps matching files for which the FSF doesn't need papers.")
@@ -919,7 +925,8 @@ Changes to files in this list are not listed.")
     ("Dale R. Worley" :changed "mail-extr.el")
     ("Jamie Zawinski" :changed "bytecode.c" :wrote "tar-mode.el"
      :cowrote "disass.el")
-    ("Andrea Corallo" :wrote "comp.c"))
+    ("Andrea Corallo" :wrote "comp.c" "[native compilation of Emacs Lisp]")
+    ("Ewan Townshend" :wrote "[24-bit color support for MS-Windows console]"))
   "Manual fixes to the list of actions taken.
 These are mostly taken from the original, manually (un)maintained
 AUTHORS file.  There are also some more recent manual additions.")
@@ -1471,7 +1478,6 @@ in the repository.")
     ("org/COPYRIGHT-AND-LICENSE" . "org/README")
     ("lisp/net/idna.el" . "puny.el")
     ;; Moved to different directories.
-    ("ctags.1" . "ctags.1")
     ("etags.1" . "etags.1")
     ("emacs.1" . "emacs.1")
     ("emacsclient.1" . "emacsclient.1")
@@ -1501,6 +1507,8 @@ in the repository.")
     ;; module.* moved to emacs-module.*
     ("src/module.h" . "emacs-module.h")
     ("src/module.c" . "emacs-module.c")
+    ;; Renamed from .h.in to .in.h.
+    ("src/emacs-module.h.in" . "emacs-module.in.h")
     ("test/src/regex-tests.el" . "regex-emacs-tests.el")
     ("test/lisp/emacs-lisp/cl-tests.el" . "cl-tests.el")
     ("url-ns.el" . "url-ns.el")

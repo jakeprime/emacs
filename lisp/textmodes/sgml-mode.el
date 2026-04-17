@@ -1,6 +1,6 @@
 ;;; sgml-mode.el --- SGML- and HTML-editing modes -*- lexical-binding:t -*-
 
-;; Copyright (C) 1992, 1995-1996, 1998, 2001-2025 Free Software
+;; Copyright (C) 1992, 1995-1996, 1998, 2001-2026 Free Software
 ;; Foundation, Inc.
 
 ;; Author: James Clark <jjc@jclark.com>
@@ -452,9 +452,6 @@ When more these are fontified together with `sgml-font-lock-keywords'.")
 (defvar sgml-display-text ()
   "Tag names as lowercase symbols, and display string when invisible.")
 
-;; internal
-(defvar sgml-tags-invisible nil)
-
 (defcustom sgml-tag-alist
   '(("![" ("ignore" t) ("include" t))
     ("!attlist")
@@ -533,6 +530,7 @@ an optional alist of possible values."
   "Add \"face\" tags with `facemenu-keymap' commands."
   (let ((tag-face (ensure-list (cdr (assq face sgml-face-tag-alist)))))
     (cond (tag-face
+           (require 'skeleton)
 	   (setq tag-face (funcall skeleton-transformation-function tag-face))
            (setq facemenu-end-add-face
                  (mapconcat (lambda (f) (concat "</" f ">")) (reverse tag-face)))
@@ -666,7 +664,11 @@ Do \\[describe-key] on the following bindings to discover what they do.
 	   ,(concat "<[^>]+[ \t\n]+[Nn][Aa][Mm][Ee]=\\(['\"]"
 		    (if sgml-xml-mode "" "?")
 		    "\\)\\(" sgml-name-re "\\)\\1")
-	   2))))
+	   2)))
+  (setq-local hs-block-start-regexp "<[^/>]*?")
+  (setq-local hs-block-end-regexp "</[^/>]*[^/]>")
+  (setq-local hs-c-start-regexp "<!--")
+  (setq-local hs-forward-sexp-function #'sgml-skip-tag-forward))
 
 (defun sgml-comment-indent ()
   (if (looking-at "--") comment-column 0))
@@ -851,6 +853,7 @@ If QUIET, do not print a message when there are no attributes for TAG."
             (setq alist (cons '("class") alist)))
           (unless (assoc-string "id" alist)
             (setq alist (cons '("id") alist))))
+        (require 'skeleton)
 	(if (stringp (car alist))
 	    (progn
 	      (insert (if (eq (preceding-char) ?\s) "" ?\s)
@@ -1053,7 +1056,7 @@ Return t if after a closing tag."
 			      ;; Ignore empty tags like <foo/>.
 			      "\\([^>]*[^/>]\\)?>"))
 		  point close)
-	      (forward-list 1)
+	      (forward-sexp 1)
 	      (setq point (point))
 	      ;; FIXME: This re-search-forward will mistakenly match
 	      ;; tag-like text inside attributes.
@@ -1066,7 +1069,7 @@ Return t if after a closing tag."
 	      (unless close
 		(goto-char point)
 		(setq return nil)))
-	  (forward-list 1))
+	  (forward-sexp 1))
 	(setq arg (1- arg)))
       return)))
 
@@ -1083,7 +1086,8 @@ With prefix argument ARG, repeat this ARG times."
   (interactive "p")
   (while (>= arg 1)
     (save-excursion
-      (let* (close open)
+      (let* ((forward-sexp-function nil)
+	     close open)
 	(if (looking-at "[ \t\n]*<")
 	    ;; just before tag
 	    (if (eq (char-after (match-end 0)) ?/)
@@ -1101,7 +1105,7 @@ With prefix argument ARG, repeat this ARG times."
 		(sgml-skip-tag-backward 1)
 		(if (or (not (eq (following-char) ?<))
 			(save-excursion
-			  (forward-list 1)
+			  (forward-sexp 1)
 			  (<= (point) point)))
 		    (error "Not on or before tag")))))
 	(if close
@@ -1134,22 +1138,17 @@ With prefix argument ARG, repeat this ARG times."
 			read-only t)
 		      (symbol-plist 'sgml-tag))))
 
-(defun sgml-tags-invisible (arg)
+(define-minor-mode sgml-tags-invisible
   "Toggle visibility of existing tags."
-  (interactive "P")
-  (let ((inhibit-read-only t)
-	string)
-    (with-silent-modifications
-      (save-excursion
-        (goto-char (point-min))
-        (if (setq-local sgml-tags-invisible
-                        (if arg
-                            (>= (prefix-numeric-value arg) 0)
-                          (not sgml-tags-invisible)))
-            (while (re-search-forward sgml-tag-name-re nil t)
-              (setq string
-                    (cdr (assq (intern-soft (downcase (match-string 1)))
-                               sgml-display-text)))
+  :global nil
+  (with-silent-modifications
+    (save-excursion
+      (goto-char (point-min))
+      (if sgml-tags-invisible
+          (while (re-search-forward sgml-tag-name-re nil t)
+            (let ((string
+                   (cdr (assq (intern-soft (downcase (match-string 1)))
+                              sgml-display-text))))
               (goto-char (match-beginning 0))
               (and (stringp string)
                    (not (overlays-at (point)))
@@ -1157,17 +1156,18 @@ With prefix argument ARG, repeat this ARG times."
                      (overlay-put ol 'before-string string)
                      (overlay-put ol 'sgml-tag t)))
               (put-text-property (point)
-                                 (progn (forward-list) (point))
-                                 'category 'sgml-tag))
-          (let ((pos (point-min)))
-            (while (< (setq pos (next-overlay-change pos)) (point-max))
-              (dolist (ol (overlays-at pos))
-                (if (overlay-get ol 'sgml-tag)
-                    (delete-overlay ol)))))
-          (remove-text-properties (point-min) (point-max) '(category nil)))))
-    (cursor-sensor-mode (if sgml-tags-invisible 1 -1))
-    (run-hooks 'sgml-tags-invisible-hook)
-    (message "")))
+                                 (let ((forward-sexp-function nil))
+                                   (forward-sexp 1)
+                                   (point))
+                                 'category 'sgml-tag)))
+        (let ((pos (point-min)))
+          (while (< (setq pos (next-overlay-change pos)) (point-max))
+            (dolist (ol (overlays-at pos))
+              (if (overlay-get ol 'sgml-tag)
+                  (delete-overlay ol)))))
+        (remove-text-properties (point-min) (point-max) '(category nil)))))
+  (when sgml-tags-invisible
+    (cursor-sensor-mode 1)))
 
 (defun sgml-cursor-sensor (window x dir)
   ;; Show preceding or following hidden tag, depending of cursor direction (and
@@ -1203,7 +1203,7 @@ and move to the line in the SGML document that caused it."
 		      (or sgml-saved-validate-command
 			  (concat sgml-validate-command
 				  " "
-                                  (when-let ((name (buffer-file-name)))
+                                  (when-let* ((name (buffer-file-name)))
 				    (shell-quote-argument
 				     (file-name-nondirectory name))))))))
   (setq sgml-saved-validate-command command)
@@ -2434,14 +2434,14 @@ To work around that, do:
 (defun html-mode--complete-at-point ()
   ;; Complete a tag like <colg etc.
   (or
-   (when-let ((tag (save-excursion
-                     (and (looking-back "<\\([^ \t\n]*\\)"
-                                        (line-beginning-position))
-                          (match-string 1)))))
+   (when-let* ((tag (save-excursion
+                      (and (looking-back "<\\([^ \t\n]*\\)"
+                                         (line-beginning-position))
+                           (match-string 1)))))
      (list (match-beginning 1) (point)
            (mapcar #'car html-tag-alist)))
    ;; Complete params like <colgroup ali etc.
-   (when-let ((tag (save-excursion (sgml-beginning-of-tag)))
+   (when-let* ((tag (save-excursion (sgml-beginning-of-tag)))
               (params (seq-filter #'consp (cdr (assoc tag html-tag-alist))))
               (param (save-excursion
                        (and (looking-back "[ \t\n]\\([^= \t\n]*\\)"
@@ -2450,14 +2450,14 @@ To work around that, do:
      (list (match-beginning 1) (point)
            (mapcar #'car params)))
    ;; Complete param values like <colgroup align=mi etc.
-   (when-let ((tag (save-excursion (sgml-beginning-of-tag)))
-              (params (seq-filter #'consp (cdr (assoc tag html-tag-alist))))
-              (param (save-excursion
-                       (and (looking-back
-                             "[ \t\n]\\([^= \t\n]+\\)=\\([^= \t\n]*\\)"
-                             (line-beginning-position))
-                            (match-string 1))))
-              (values (cdr (assoc param params))))
+   (when-let* ((tag (save-excursion (sgml-beginning-of-tag)))
+               (params (seq-filter #'consp (cdr (assoc tag html-tag-alist))))
+               (param (save-excursion
+                        (and (looking-back
+                              "[ \t\n]\\([^= \t\n]+\\)=\\([^= \t\n]*\\)"
+                              (line-beginning-position))
+                             (match-string 1))))
+               (values (cdr (assoc param params))))
      (list (match-beginning 2) (point)
            (mapcar #'car values)))))
 
@@ -2474,10 +2474,9 @@ To work around that, do:
     (when (and (file-exists-p file)
                (not (yes-or-no-p (format "%s exists; overwrite?" file))))
       (user-error "%s exists" file))
-    (with-temp-buffer
-      (set-buffer-multibyte nil)
-      (insert image)
-      (write-region (point-min) (point-max) file))
+    (let ((coding-system-for-write 'emacs-internal))
+      (with-temp-file file
+        (insert image)))
     (insert (format "<img src=%S>\n" (file-relative-name file)))
     (insert-image
      (create-image file (mailcap-mime-type-to-extension type) nil

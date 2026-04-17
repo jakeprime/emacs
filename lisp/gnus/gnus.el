@@ -1,6 +1,6 @@
 ;;; gnus.el --- a newsreader for GNU Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1987-1990, 1993-1998, 2000-2025 Free Software
+;; Copyright (C) 1987-1990, 1993-1998, 2000-2026 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Masanobu UMEDA <umerin@flab.flab.fujitsu.junet>
@@ -369,7 +369,7 @@ If nil, there will be no Gnus logo in the mode-line."
   :group 'gnus-group)
 
 (defface gnus-group-news-1
-  '((t (:inherit gnus-group-news-1-empty :bold t)))
+  '((t (:inherit gnus-group-news-1-empty :weight bold)))
   "Level 1 newsgroup face."
   :group 'gnus-group)
 
@@ -386,7 +386,7 @@ If nil, there will be no Gnus logo in the mode-line."
   :group 'gnus-group)
 
 (defface gnus-group-news-2
-  '((t (:inherit gnus-group-news-2-empty :bold t)))
+  '((t (:inherit gnus-group-news-2-empty :weight bold)))
   "Level 2 newsgroup face."
   :group 'gnus-group)
 
@@ -403,7 +403,7 @@ If nil, there will be no Gnus logo in the mode-line."
   :group 'gnus-group)
 
 (defface gnus-group-news-3
-  '((t (:inherit gnus-group-news-3-empty :bold t)))
+  '((t (:inherit gnus-group-news-3-empty :weight bold)))
   "Level 3 newsgroup face."
   :group 'gnus-group)
 
@@ -420,7 +420,7 @@ If nil, there will be no Gnus logo in the mode-line."
   :group 'gnus-group)
 
 (defface gnus-group-news-4
-  '((t (:inherit gnus-group-news-4-empty :bold t)))
+  '((t (:inherit gnus-group-news-4-empty :weight bold)))
   "Level 4 newsgroup face."
   :group 'gnus-group)
 
@@ -437,7 +437,7 @@ If nil, there will be no Gnus logo in the mode-line."
   :group 'gnus-group)
 
 (defface gnus-group-news-5
-  '((t (:inherit gnus-group-news-5-empty :bold t)))
+  '((t (:inherit gnus-group-news-5-empty :weight bold)))
   "Level 5 newsgroup face."
   :group 'gnus-group)
 
@@ -454,7 +454,7 @@ If nil, there will be no Gnus logo in the mode-line."
   :group 'gnus-group)
 
 (defface gnus-group-news-6
-  '((t (:inherit gnus-group-news-6-empty :bold t)))
+  '((t (:inherit gnus-group-news-6-empty :weight bold)))
   "Level 6 newsgroup face."
   :group 'gnus-group)
 
@@ -471,7 +471,7 @@ If nil, there will be no Gnus logo in the mode-line."
   :group 'gnus-group)
 
 (defface gnus-group-news-low
-  '((t (:inherit gnus-group-news-low-empty :bold t)))
+  '((t (:inherit gnus-group-news-low-empty :weight bold)))
   "Low level newsgroup face."
   :group 'gnus-group)
 
@@ -483,12 +483,12 @@ If nil, there will be no Gnus logo in the mode-line."
       (background light))
      (:foreground "DeepPink3"))
     (t
-     (:italic t)))
+     (:slant italic)))
   "Level 1 empty mailgroup face."
   :group 'gnus-group)
 
 (defface gnus-group-mail-1
-  '((t (:inherit gnus-group-mail-1-empty :bold t)))
+  '((t (:inherit gnus-group-mail-1-empty :weight bold)))
   "Level 1 mailgroup face."
   :group 'gnus-group)
 
@@ -500,12 +500,12 @@ If nil, there will be no Gnus logo in the mode-line."
       (background light))
      (:foreground "HotPink3"))
     (t
-     (:italic t)))
+     (:slant italic)))
   "Level 2 empty mailgroup face."
   :group 'gnus-group)
 
 (defface gnus-group-mail-2
-  '((t (:inherit gnus-group-mail-2-empty :bold t)))
+  '((t (:inherit gnus-group-mail-2-empty :weight bold)))
   "Level 2 mailgroup face."
   :group 'gnus-group)
 
@@ -522,7 +522,7 @@ If nil, there will be no Gnus logo in the mode-line."
   :group 'gnus-group)
 
 (defface gnus-group-mail-3
-  '((t (:inherit gnus-group-mail-3-empty :bold t)))
+  '((t (:inherit gnus-group-mail-3-empty :weight bold)))
   "Level 3 mailgroup face."
   :group 'gnus-group)
 
@@ -534,12 +534,12 @@ If nil, there will be no Gnus logo in the mode-line."
       (background light))
      (:foreground "DeepPink4"))
     (t
-     (:bold t)))
+     (:weight bold)))
   "Low level empty mailgroup face."
   :group 'gnus-group)
 
 (defface gnus-group-mail-low
-  '((t (:inherit gnus-group-mail-low-empty :bold t)))
+  '((t (:inherit gnus-group-mail-low-empty :weight bold)))
   "Low level mailgroup face."
   :group 'gnus-group)
 
@@ -569,12 +569,12 @@ If nil, there will be no Gnus logo in the mode-line."
   :group 'gnus-summary)
 
 (defface gnus-summary-high-ticked
-  '((t (:inherit gnus-summary-normal-ticked :bold t)))
+  '((t (:inherit gnus-summary-normal-ticked :weight bold)))
   "Face used for high interest ticked articles."
   :group 'gnus-summary)
 
 (defface gnus-summary-low-ticked
-  '((t (:inherit gnus-summary-normal-ticked :italic t)))
+  '((t (:inherit gnus-summary-normal-ticked :slant italic)))
   "Face used for low interest ticked articles."
   :group 'gnus-summary)
 
@@ -591,12 +591,12 @@ If nil, there will be no Gnus logo in the mode-line."
   :group 'gnus-summary)
 
 (defface gnus-summary-high-ancient
-  '((t (:inherit gnus-summary-normal-ancient :bold t)))
+  '((t (:inherit gnus-summary-normal-ancient :weight bold)))
   "Face used for high interest ancient articles."
   :group 'gnus-summary)
 
 (defface gnus-summary-low-ancient
-  '((t (:inherit gnus-summary-normal-ancient :italic t)))
+  '((t (:inherit gnus-summary-normal-ancient :slant italic)))
   "Face used for low interest ancient articles."
   :group 'gnus-summary)
 
@@ -611,12 +611,12 @@ If nil, there will be no Gnus logo in the mode-line."
   :group 'gnus-summary)
 
 (defface gnus-summary-high-undownloaded
-  '((t (:inherit gnus-summary-normal-undownloaded :bold t)))
+  '((t (:inherit gnus-summary-normal-undownloaded :weight bold)))
   "Face used for high interest uncached articles."
   :group 'gnus-summary)
 
 (defface gnus-summary-low-undownloaded
-  '((t (:inherit gnus-summary-normal-undownloaded :italic t)))
+  '((t (:inherit gnus-summary-normal-undownloaded :slant italic)))
   "Face used for low interest uncached articles."
   :group 'gnus-summary)
 
@@ -627,12 +627,12 @@ If nil, there will be no Gnus logo in the mode-line."
   :group 'gnus-summary)
 
 (defface gnus-summary-high-unread
-  '((t (:inherit gnus-summary-normal-unread :bold t)))
+  '((t (:inherit gnus-summary-normal-unread :weight bold)))
   "Face used for high interest unread articles."
   :group 'gnus-summary)
 
 (defface gnus-summary-low-unread
-  '((t (:inherit gnus-summary-normal-unread :italic t)))
+  '((t (:inherit gnus-summary-normal-unread :slant italic)))
   "Face used for low interest unread articles."
   :group 'gnus-summary)
 
@@ -649,12 +649,12 @@ If nil, there will be no Gnus logo in the mode-line."
   :group 'gnus-summary)
 
 (defface gnus-summary-high-read
-  '((t (:inherit gnus-summary-normal-read :bold t)))
+  '((t (:inherit gnus-summary-normal-read :weight bold)))
   "Face used for high interest read articles."
   :group 'gnus-summary)
 
 (defface gnus-summary-low-read
-  '((t (:inherit gnus-summary-normal-read :italic t)))
+  '((t (:inherit gnus-summary-normal-read :slant italic)))
   "Face used for low interest read articles."
   :group 'gnus-summary)
 
@@ -757,15 +757,22 @@ be used directly.")
     (september "#bf9900" "#ffcc00"))
   "Color alist used for the Gnus logo.")
 
+(defcustom gnus-logo-colors nil
+  "Colors used for the Gnus logo."
+  :set-after '(gnus-logo-color-style)
+  :type '(choice (const :tag "Use default" nil)
+                 (list color color))
+  :group 'gnus-xmas)
+
 (defcustom gnus-logo-color-style 'ma
   "Color styles used for the Gnus logo."
   :type `(choice ,@(mapcar (lambda (elem) (list 'const (car elem)))
 			   gnus-logo-color-alist))
+  :set (lambda (sym val)
+         (set-default-toplevel-value sym val)
+         (set-default-toplevel-value 'gnus-logo-colors
+                                     (cdr (assq val gnus-logo-color-alist))))
   :group 'gnus-xmas)
-
-(defvar gnus-logo-colors
-  (cdr (assq gnus-logo-color-style gnus-logo-color-alist))
-  "Colors used for the Gnus logo.")
 
 (defvar image-load-path)
 (declare-function image-size "image.c" (spec &optional pixels frame))
@@ -1918,7 +1925,6 @@ spam-autodetect-recheck-messages is set.")
 	  (variable-item spam-use-bsfilter-headers)
 	  (variable-item spam-use-stat)
 	  (variable-item spam-use-blackholes)
-	  (variable-item spam-use-hashcash)
 	  (variable-item spam-use-bogofilter-headers)
 	  (variable-item spam-use-bogofilter)))
    :function-document
@@ -1951,7 +1957,6 @@ set."
 	(variable-item spam-use-crm114)
 	(variable-item spam-use-stat)
 	(variable-item spam-use-blackholes)
-	(variable-item spam-use-hashcash)
 	(variable-item spam-use-spamassassin)
 	(variable-item spam-use-spamassassin-headers)
 	(variable-item spam-use-bsfilter)
@@ -2713,66 +2718,66 @@ are always t.")
 It works along the same lines as a normal formatting string,
 with some simple extensions.
 
-%N          Article number, left padded with spaces (string)
-%S          Subject (string)
-%s          Subject if it is at the root of a thread, and \"\"
-            otherwise (string)
-%n          Name of the poster (string)
-%a          Extracted name of the poster (string)
-%A          Extracted address of the poster (string)
-%F          Contents of the From: header (string)
-%f          Contents of the From: or To: headers (string)
-%x          Contents of the Xref: header (string)
-%D          Contents of the Date: header article (string)
-%d          Date of the article (string) in DD-MMM format
-%o          Date of the article (string) in YYYYMMDD`T'HHMMSS
-            format
-%M          Message-id of the article (string)
-%r          References of the article (string)
-%c          Number of characters in the article (integer)
-%k          Pretty-printed version of the above (string)
-            For example, \"1.2k\" or \"0.4M\".
-%L          Number of lines in the article (integer)
-%Z          RSV of the article; nil if not in an nnselect group (integer)
-%G          Originating group name for the article; nil if not
-            in an nnselect group (string)
-%g          Short from  of the originating group name for the article;
-            nil if not in an nnselect group (string)
-%I          Indentation based on thread level (a string of
-            spaces)
-%B          A complex trn-style thread tree (string)
-            The variables `gnus-sum-thread-*' can be used for
-            customization.
-%T          A string with two possible values: 80 spaces if the
-            article is on thread level two or larger and 0 spaces
-            on level one
-%R          \"A\" if this article has been replied to, \" \"
-            otherwise (character)
-%U          \"Read\" status of this article.
-            See Info node `(gnus)Marking Articles'
-%[          Opening bracket (character, \"[\" or \"<\")
-%]          Closing bracket (character, \"]\" or \">\")
-%>          Spaces of length thread-level (string)
-%<          Spaces of length (- 20 thread-level) (string)
-%i          Article score (number)
-%z          Article zcore (character)
-%t          Number of articles under the current thread (number).
-%e          Whether the thread is empty or not (character).
-%V          Total thread score (number).
-%P          The line number (number).
-%O          Download mark (character).
-%*          If present, indicates desired cursor position
-            (instead of after first colon).
-%u          User defined specifier.  The next character in the
-            format string should be a letter.  Gnus will call the
-            function gnus-user-format-function-X, where X is the
-            letter following %u.  The function will be passed the
-            current header as argument.  The function should
-            return a string, which will be inserted into the
-            summary just like information from any other summary
-            specifier.
-&user-date; Age sensitive date format.  Various date format is
-            defined in `gnus-user-date-format-alist'.
+%N           Article number, left padded with spaces (string)
+%S           Subject (string)
+%s           Subject if it is at the root of a thread, and \"\"
+             otherwise (string)
+%n           Name of the poster (string)
+%a           Extracted name of the poster (string)
+%A           Extracted address of the poster (string)
+%F           Contents of the From: header (string)
+%f           Contents of the From: or To: headers (string)
+%x           Contents of the Xref: header (string)
+%D           Contents of the Date: header article (string)
+%d           Date of the article (string) in DD-MMM format
+%o           Date of the article (string) in YYYYMMDD`T'HHMMSS
+             format
+%M           Message-id of the article (string)
+%r           References of the article (string)
+%c           Number of characters in the article (integer)
+%k           Pretty-printed version of the above (string)
+             For example, \"1.2k\" or \"0.4M\".
+%L           Number of lines in the article (integer)
+%Z           RSV of the article; nil if not in an nnselect group (integer)
+%G           Originating group name for the article; nil if not
+             in an nnselect group (string)
+%g           Short from  of the originating group name for the article;
+             nil if not in an nnselect group (string)
+%I           Indentation based on thread level (a string of
+             spaces)
+%B           A complex trn-style thread tree (string)
+             The variables `gnus-sum-thread-*' can be used for
+             customization.
+%T           A string with two possible values: 80 spaces if the
+             article is on thread level two or larger and 0 spaces
+             on level one
+%R           \"A\" if this article has been replied to, \" \"
+             otherwise (character)
+%U           \"Read\" status of this article.
+             See Info node `(gnus)Marking Articles'
+%[           Opening bracket (character, \"[\" or \"<\")
+%]           Closing bracket (character, \"]\" or \">\")
+%>           Spaces of length thread-level (string)
+%<           Spaces of length (- 20 thread-level) (string)
+%i           Article score (number)
+%z           Article zcore (character)
+%t           Number of articles under the current thread (number).
+%e           Whether the thread is empty or not (character).
+%V           Total thread score (number).
+%P           The line number (number).
+%O           Download mark (character).
+%*           If present, indicates desired cursor position
+             (instead of after first colon).
+%u           User defined specifier.  The next character in the
+             format string should be a letter.  Gnus will call the
+             function gnus-user-format-function-X, where X is the
+             letter following %u.  The function will be passed the
+             current header as argument.  The function should
+             return a string, which will be inserted into the
+             summary just like information from any other summary
+             specifier.
+%&user-date; Age sensitive date format.  Various date format is
+             defined in `gnus-user-date-format-alist'.
 
 
 The %U (status), %R (replied) and %z (zcore) specs have to be handled
@@ -2798,23 +2803,27 @@ See Info node `(gnus)Formatting Variables'."
 ;;;
 
 (defun gnus-suppress-keymap (keymap)
+  (declare (obsolete nil "31.1"))
   (suppress-keymap keymap)
   (let ((keys '([delete] "\177" "\M-u"))) ;[mouse-2]
     (while keys
       (define-key keymap (pop keys) 'undefined))))
 
-(defvar gnus-article-mode-map
-  (let ((keymap (make-sparse-keymap)))
-    (gnus-suppress-keymap keymap)
-    keymap))
-(defvar gnus-summary-mode-map
-  (let ((keymap (make-keymap)))
-    (gnus-suppress-keymap keymap)
-    keymap))
-(defvar gnus-group-mode-map
-  (let ((keymap (make-keymap)))
-    (gnus-suppress-keymap keymap)
-    keymap))
+(defvar-keymap gnus-article-mode-map
+  :suppress t
+  "<delete>" #'undefined
+  "DEL"      #'undefined
+  "M-u"      #'undefined)
+(defvar-keymap gnus-summary-mode-map
+  :full t :suppress t
+  "<delete>" #'undefined
+  "DEL"      #'undefined
+  "M-u"      #'undefined)
+(defvar-keymap gnus-group-mode-map
+  :full t :suppress t
+  "<delete>" #'undefined
+  "DEL"      #'undefined
+  "M-u"      #'undefined)
 
 
 
@@ -3124,9 +3133,9 @@ g -- Group name."
   "Check whether GROUP supports function FUNC.
 GROUP can either be a string (a group name) or a select method."
   (ignore-errors
-    (when-let ((method (if (stringp group)
-		           (car (gnus-find-method-for-group group))
-		         group)))
+    (when-let* ((method (if (stringp group)
+		            (car (gnus-find-method-for-group group))
+		          group)))
       (unless (featurep method)
 	(require method))
       (fboundp (intern (format "%s-%s" method func))))))
@@ -3780,7 +3789,7 @@ just the host name."
 		gsep "."))
 	(setq levels (- glen levels))
 	(dolist (g glist)
-	  (push (if (>= (cl-decf levels) 0)
+          (push (if (>= (decf levels) 0)
 		    (if (zerop (length g))
 			""
 		      (substring g 0 1))
