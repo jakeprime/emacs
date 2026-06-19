@@ -292,17 +292,17 @@ temporarily blinks with this face."
   :version "28.1")
 
 (defface shr-h4
-  '((t (:inherit default)))
+  '((t))
   "Face for <h4> elements."
   :version "28.1")
 
 (defface shr-h5
-  '((t (:inherit default)))
+  '((t))
   "Face for <h5> elements."
   :version "28.1")
 
 (defface shr-h6
-  '((t (:inherit default)))
+  '((t))
   "Face for <h6> elements."
   :version "28.1")
 
@@ -2290,8 +2290,7 @@ See `outline-search-function' for BOUND, MOVE, BACKWARD and LOOKING-AT."
 	  (bound (or bound
 		     (if backward (point-min) (point-max)))))
       (save-excursion
-	(when (and (not (bolp))
-		   (get-text-property (point) 'outline-level))
+	(when (get-text-property (point) 'outline-level)
 	  (forward-line (if backward -1 1)))
 	(if backward
 	    (unless (get-text-property (point) 'outline-level)

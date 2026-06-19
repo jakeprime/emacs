@@ -414,7 +414,6 @@ ftcrfont_text_extents (struct font *font,
 {
   int width, i;
 
-  block_input ();
   width = ftcrfont_glyph_extents (font, code[0], metrics);
   for (i = 1; i < nglyphs; i++)
     {
@@ -434,7 +433,6 @@ ftcrfont_text_extents (struct font *font,
 	}
       width += w;
     }
-  unblock_input ();
 
   if (metrics)
     metrics->width = width;

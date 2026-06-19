@@ -606,7 +606,8 @@ This function obeys the conventions for collation order in your
 locale settings.  For example, punctuation and whitespace characters
 might be considered less significant for sorting:
 
-\(sort \\='("11" "12" "1 1" "1 2" "1.1" "1.2") \\='string-collate-lessp)
+\(sort \\='("11" "12" "1 1" "1 2" "1.1" "1.2")
+      :lessp #\\='string-collate-lessp)
   => ("11" "1 1" "1.1" "12" "1 2" "1.2")
 
 The optional argument LOCALE, a string, overrides the setting of your
@@ -2803,7 +2804,8 @@ DEFUN ("equal", Fequal, Sequal, 2, 2, 0,
        doc: /* Return t if two Lisp objects have similar structure and contents.
 They must have the same data type.
 Conses are compared by comparing the cars and the cdrs.
-Vectors and strings are compared element by element.
+Vectors and strings are compared element by element (so text properties
+of strings are ignored).
 Numbers are compared via `eql', so integers do not equal floats.
 \(Use `=' if you want integers and floats to be able to be equal.)
 Symbols must match exactly.  */)

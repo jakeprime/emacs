@@ -3081,7 +3081,7 @@ will be used."
 	     ;; We discard hops, if existing, that's why we cannot use
 	     ;; `file-remote-p'.
 	     (prompt (format "PS1=%s %s"
-			     (tramp-make-tramp-file-name v)
+			     (tramp-make-tramp-file-name v 'noloc)
 			     tramp-initial-end-of-output))
 	     ;; We use as environment the difference to toplevel
 	     ;; `process-environment'.
@@ -3091,8 +3091,27 @@ will be used."
 			(if (string-search "=" elt)
 			    (setq env (append env `(,elt)))
 			  (setq uenv (cons elt uenv))))))
+	     (env (if tramp-propagate-emacsclient-tramp
+		      (setenv-internal
+		       env "EMACSCLIENT_TRAMP"
+		       (tramp-make-tramp-file-name v 'noloc) 'keep)
+		    env))
 	     (env (setenv-internal
 		   env "INSIDE_EMACS" (tramp-inside-emacs) 'keep))
+	     ;; Environment is too large.  Keep it here.
+	     (eenv (and (> (apply #'+ (length env) (seq-map #'length env)) 2000)
+			env))
+	     (env (if (not eenv) env
+		    `(,(concat
+			"INSIDE_EMACS=" (getenv-internal "INSIDE_EMACS" env))
+		      ,(concat "PS1=" (getenv-internal "PS1" env)))))
+	     (eenv (setenv-internal eenv "INSIDE_EMACS" nil nil))
+	     (eenv (setenv-internal eenv "PS1" nil nil))
+	     vars
+	     (eenv (dolist (item (reverse eenv) vars)
+		     (setq item (split-string item "=" 'omit))
+		     (setcdr item (string-join (cdr item) "="))
+		     (push (format "%s %s" (car item) (cdr item)) vars)))
 	     (command
 	      (when (stringp program)
 		(format "cd %s && %s exec %s %s env %s %s"
@@ -3207,6 +3226,16 @@ will be used."
 			(widen)
 			(delete-region mark (point-max))
 			(narrow-to-region (point-max) (point-max))
+			;; Send delayed environment.
+			(when eenv
+			  (tramp-send-command
+			   v
+			   (format
+			    "while read var val; do export $var=\"$val\"; done <<'%s'\n%s\n%s"
+			    tramp-end-of-heredoc
+			    (string-join eenv "\n")
+			    tramp-end-of-heredoc)
+			   t))
 			;; Now do it.
 			(if command
 			    ;; Send the command.
@@ -3326,7 +3355,13 @@ will be used."
             (if (string-search "=" elt)
                 (setq env (append env `(,elt)))
               (setq uenv (cons elt uenv)))))
+      (when tramp-propagate-emacsclient-tramp
+	(setq env (setenv-internal
+		   env "EMACSCLIENT_TRAMP"
+		   (tramp-make-tramp-file-name v 'noloc) 'keep)))
       (setq env (setenv-internal env "INSIDE_EMACS" (tramp-inside-emacs) 'keep))
+      ;; Remove looong environment variables, for example from tramp-tests.el.
+      (setq env (seq-remove (lambda (x) (length> x 256)) env))
       (when env
 	(setq command
 	      (format
@@ -4688,19 +4723,22 @@ process to set up.  VEC specifies the connection."
 	(tramp-send-command
 	 vec (format "unset %s" (string-join unset " ")) t)))
 
+    ;; FIXME: This doesn't work with `tramp-test42-utf8' and "/ssh::tmp".
     ;; Set connection-local variable `command-line-max-length'.
     ;; `command-line-max-length' exists since Emacs 31.
     ;; `connection-local-profile-name-for-criteria' exists since Emacs 29.1.
     ;; We simulate it with `make-symbol'.
-    (when (boundp 'command-line-max-length)
-      (let* ((criteria (tramp-get-connection-local-criteria vec))
-	     (profile (if (fboundp 'connection-local-profile-name-for-criteria)
-			  (connection-local-profile-name-for-criteria criteria)
-			(make-symbol "generated-profile-name"))))
-	(connection-local-set-profile-variables
-	 profile
-	 `((command-line-max-length . ,(tramp-get-remote-pipe-buf vec))))
-	(connection-local-set-profiles criteria profile)))))
+    ;; (when (boundp 'command-line-max-length)
+    ;;   (let* ((arg-max (tramp-get-remote-arg-max vec))
+    ;; 	     (criteria (tramp-get-connection-local-criteria vec))
+    ;; 	     (profile (if (fboundp 'connection-local-profile-name-for-criteria)
+    ;; 			  (connection-local-profile-name-for-criteria criteria)
+    ;; 			(make-symbol "generated-profile-name"))))
+    ;; 	(connection-local-set-profile-variables
+    ;; 	 profile
+    ;; 	 `((command-line-max-length . ,(if arg-max (floor arg-max 4) 4094))))
+    ;; 	(connection-local-set-profiles criteria profile)))))
+    ))
 
 ;; Old text from documentation of tramp-methods:
 ;; Using a uuencode/uudecode inline method is discouraged, please use one
@@ -5808,6 +5846,17 @@ Nonexistent directories are removed from spec."
 	  (cl-remove-if
 	   (lambda (x) (not (tramp-get-file-property vec x "file-directory-p")))
 	   remote-path))))))
+
+(defun tramp-get-remote-arg-max (vec)
+  "Return ARG_MAX config from the remote side."
+  (with-tramp-connection-property vec "arg-max"
+    (when-let* ((result
+		 (tramp-send-command-and-read
+		  vec (format "getconf ARG_MAX 2>%s"
+			      (tramp-get-remote-null-device vec))
+		  'noerror))
+		((natnump result)))
+      result)))
 
 ;; The PIPE_BUF in POSIX [1] can be as low as 512 [2].  Here are the values
 ;; on various platforms:

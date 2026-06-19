@@ -428,6 +428,9 @@ EmacsFrameResize (Widget widget)
        ew->core.width, ew->core.height,
        f->new_width, f->new_height);
 
+  if (FRAME_PARENT_FRAME (f)) 	/* Size always up to date.  */
+    return;
+
   change_frame_size (f, ew->core.width, ew->core.height,
 		     false, true, false);
 
@@ -495,6 +498,8 @@ EmacsFrameExpose (Widget widget, XEvent *event, Region region)
 
   expose_frame (f, event->xexpose.x, event->xexpose.y,
 		event->xexpose.width, event->xexpose.height);
+  if (event->xexpose.count == 0)
+    x_clear_under_internal_border (f);
   flush_frame (f);
 }
 

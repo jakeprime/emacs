@@ -7656,6 +7656,12 @@ child_signal_notify (void)
 static void dummy_handler (int sig) {}
 static signal_handler_t volatile lib_child_handler;
 
+/* True if Glib installs its own SIGCHLD handler that Emacs must work
+   around.  Determined once in init_process_emacs; consulted elsewhere
+   (e.g. xwidget.c) to decide whether the about:blank load workaround
+   is needed.  */
+bool glib_installs_sigchld_handler;
+
 /* Handle a SIGCHLD signal by looking for known child processes of
    Emacs whose status have changed.  For each one found, record its
    new status.
@@ -8558,11 +8564,14 @@ integer or floating point values.
  majflt  -- number of major page faults (number)
  cminflt -- cumulative number of minor page faults (number)
  cmajflt -- cumulative number of major page faults (number)
- utime   -- user time used by the process, in `current-time' format
- stime   -- system time used by the process (current-time)
+ utime   -- total user time used by the process since its start,
+              in `current-time' format
+ stime   -- total system time used by the process since its start
+              (current-time)
  time    -- sum of utime and stime (current-time)
- cutime  -- user time used by the process and its children (current-time)
- cstime  -- system time used by the process and its children (current-time)
+ cutime  -- total user time used by the process and its children (current-time)
+ cstime  -- total system time used by the process and its children
+              (current-time)
  ctime   -- sum of cutime and cstime (current-time)
  pri     -- priority of the process (number)
  nice    -- nice value of the process (number)
@@ -8571,7 +8580,8 @@ integer or floating point values.
  vsize   -- virtual memory size of the process in KB's (number)
  rss     -- resident set size of the process in KB's (number)
  etime   -- elapsed time the process is running (current-time)
- pcpu    -- percents of CPU time used by the process (floating-point number)
+ pcpu    -- percents of total CPU time used by the process since its start
+              (floating-point number)
  pmem    -- percents of total physical memory used by process's resident set
               (floating-point number)
  args    -- command line which invoked the process (string).  */)
@@ -8714,6 +8724,7 @@ init_process_emacs (int sockfd)
   if (lib_child_handler != dummy_handler)
     {
       /* The hacky workaround is needed on this platform.  */
+      glib_installs_sigchld_handler = true;
       signal_handler_t lib_child_handler_glib = lib_child_handler;
       catch_child_signal ();
       eassert (lib_child_handler == dummy_handler);

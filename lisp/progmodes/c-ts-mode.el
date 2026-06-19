@@ -200,11 +200,10 @@ To set the default indent style globally, use
       (user-error "The current buffer is not in `c-ts-mode' nor `c++-ts-mode'")
     (setq-local c-ts-mode-indent-style style)
     (setq treesit-simple-indent-rules
-          (if (functionp style)
-              (funcall style)
-            (c-ts-mode--simple-indent-rules
-             (if (derived-mode-p 'c-ts-mode) 'c 'cpp)
-             style)))))
+          (let ((lang (if (derived-mode-p 'c-ts-mode) 'c 'cpp)))
+            (if (functionp style)
+                (list (cons lang (funcall style)))
+              (c-ts-mode--simple-indent-rules lang style))))))
 
 (defcustom c-ts-mode-emacs-sources-support t
   "Whether to enable Emacs source-specific C features.
@@ -1275,7 +1274,8 @@ if `c-ts-mode-emacs-sources-support' is non-nil."
                     "goto_statement"
                     "case_statement")))
     (text ,(regexp-opt '("comment"
-                         "raw_string_literal"))))
+                         "raw_string_literal")))
+    (comment "comment"))
   "`treesit-thing-settings' for both C and C++.")
 
 ;;; Support for FOR_EACH_* macros
@@ -1475,7 +1475,9 @@ in your init files, or customize `treesit-enabled-modes'."
   :group 'c
   :after-hook (c-ts-mode-set-modeline)
 
-  (when (treesit-ensure-installed 'c)
+  ;; `treesit-ready-p' also checks for buffer size.
+  (when (and (treesit-ensure-installed 'c)
+             (treesit-ready-p 'c))
     ;; Create an "for-each" parser, see `c-ts-mode--emacs-set-ranges'
     ;; for more.
     (when c-ts-mode-emacs-sources-support
@@ -1554,7 +1556,9 @@ recommended to enable `electric-pair-mode' with this mode."
   :group 'c++
   :after-hook (c-ts-mode-set-modeline)
 
-  (when (treesit-ensure-installed 'cpp)
+  ;; `treesit-ready-p' also checks for buffer size.
+  (when (and (treesit-ensure-installed 'cpp)
+             (treesit-ready-p 'cpp))
     (let ((primary-parser (treesit-parser-create 'cpp)))
 
       ;; Syntax.

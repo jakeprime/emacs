@@ -553,7 +553,8 @@ displayed instead."
 (defcustom dired-auto-toggle-b-switch nil
   "Whether to automatically add or remove the `b' switch.
 If non-nil, the function `dired--toggle-b-switch' (which see) is added
-to `post-command-hook' in Dired mode."
+to `post-command-hook' in Dired mode, unless the `ls' used by Dired does
+not accept the `b' switch."
   :type 'boolean
   :group 'dired
   :initialize #'custom-initialize-default
@@ -1458,10 +1459,20 @@ The return value is the target column for the file names."
       ;; (buffer-local), so we can call dired-readin:
       (let ((failed t))
 	(unwind-protect
-	    (progn (dired-readin)
-                   (unless (and dired--ls-error-buffer
-                                (get-buffer "*ls error*"))
-		     (setq failed nil)))
+            (progn
+              ;; `dired--ls-error-buffer' should only be set in
+              ;; `insert-directory', and if `ls' errors and the buffer
+              ;; displaying the error message pops ups,
+              ;; `dired--ls-error-buffer' is then unset.  But if for
+              ;; some reason it gets set before the next Dired
+              ;; buffer-display command is invoked, this can raise an
+              ;; error, so ensure the variable is unset before reading
+              ;; the directory contents into a Dired buffer.
+              (setq dired--ls-error-buffer nil)
+              (dired-readin)
+              (unless (and dired--ls-error-buffer
+                           (get-buffer "*ls error*"))
+                (setq failed nil)))
 	  ;; If either `dired-readin' failed (e.g. if parent directories
 	  ;; are inaccessible) or `ls' errored, don't leave the Dired
 	  ;; buffer around.
@@ -1472,15 +1483,16 @@ The return value is the target column for the file names."
       (dired-initial-position dirname))
     (when (consp dired-directory)
       (dired--align-all-files))
-    ;; Pop up a warning if the Dired listing displays a literal newline.
-    ;; We do this here in order to get the warning not only when
-    ;; interactively invoking `dired' on a directory, but also e.g. when
-    ;; passing the directory name as a command line argument when
-    ;; starting Emacs from the shell.
+    ;; Pop up a warning if the Dired listing displays a literal newline
+    ;; and `ls' can take the `b' switch.  We do this here in order to
+    ;; get the warning not only when interactively invoking `dired' on a
+    ;; directory, but also e.g. when passing the directory name as a
+    ;; command line argument when starting Emacs from the shell.
     (unless (or dired-auto-toggle-b-switch
                 (dired-switches-escape-p dired-listing-switches)
                 (dired-switches-escape-p dired-actual-switches))
-      (when (dired--filename-with-newline-p)
+      (when (and (dired--filename-with-newline-p)
+                 (dired--ls-accept-b-switch-p))
         (dired--display-filename-with-newline-warning buffer)))
     (set-buffer old-buf)
     buffer))
@@ -4054,6 +4066,10 @@ newline character (regardless of whether Dired displays the character as
 a literal newline or as \"\\n\")."
   (directory-files default-directory nil "\n"))
 
+(defun dired--ls-accept-b-switch-p ()
+  "Return non-nil if the `ls' used by Dired accepts the `b' switch."
+  (eq 0 (call-process insert-directory-program nil nil nil "-b")))
+
 (defun dired--remove-b-switch ()
   "Remove all variants of the `b' switch from `dired-actual-switches'.
 This removes not only all occurrences of the short form `-b' but also
@@ -4071,8 +4087,9 @@ the long forms `--escape' and `--quoting-style=escape'."
   "Add or remove `b' switch and redisplay Dired buffer.
 When the current Dired buffer has a file name containing a newline, add
 the `b' switch to the actual switches if it isn't already among them;
-otherwise remove the `b' switch unless it is in `dired-listing-switches'.
-Then redisplay the Dired buffer.  This function is called from
+otherwise remove the `b' switch unless it is in
+`dired-listing-switches'.  Then redisplay the Dired buffer.  When
+`dired-auto-toggle-b-switch' is non-nil, this function is called from
 `post-command-hook' in Dired mode buffers."
   (when (eq major-mode 'dired-mode)
     (if (and (dired--filename-with-newline-p) dired-auto-toggle-b-switch)
@@ -4087,12 +4104,13 @@ Then redisplay the Dired buffer.  This function is called from
 (defun dired--set-auto-toggle-b-switch (symbol value)
   "The :set function for user option `dired-auto-toggle-b-switch'."
   (custom-set-default symbol value)
-  (if value
-      (add-hook 'post-command-hook #'dired--toggle-b-switch nil t)
-    (remove-hook 'post-command-hook #'dired--toggle-b-switch t))
-  (dolist (b (buffer-list))
-    (with-current-buffer b
-      (dired--toggle-b-switch))))
+  (when (dired--ls-accept-b-switch-p)
+    (if value
+        (add-hook 'post-command-hook #'dired--toggle-b-switch nil t)
+      (remove-hook 'post-command-hook #'dired--toggle-b-switch t))
+    (dolist (b (buffer-list))
+      (with-current-buffer b
+        (dired--toggle-b-switch)))))
 
 (defun dired--display-filename-with-newline-warning (dir)
   "Display a warning if buffer DIR has a file name with a newline."

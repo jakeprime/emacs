@@ -117,9 +117,10 @@
        (t (add-to-list
            'tramp-methods
            `("mock"
-	     (tramp-login-program	,tramp-default-remote-shell)
+	     (tramp-login-program	,tramp-encoding-shell)
 	     (tramp-login-args		(("-i")))
              (tramp-direct-async	("-c"))
+             (tramp-tmpdir		,temporary-file-directory)
 	     (tramp-remote-shell	,tramp-default-remote-shell)
 	     (tramp-remote-shell-args	("-c"))
 	     (tramp-connection-timeout	10)))
@@ -219,16 +220,14 @@
     '(fset 'tramp-gvfs-handler-askquestion
 	   (lambda (_message _choices) '(t nil 0)))))
 
-(defconst tramp-test-vec
-  (and (file-remote-p ert-remote-temporary-file-directory)
-       (tramp-dissect-file-name ert-remote-temporary-file-directory))
-  "The used `tramp-file-name' structure.")
-
 (setq auth-source-cache-expiry nil
       auth-source-save-behavior nil
       auto-revert-remote-files t
       auto-revert-use-notify t
       ert-batch-backtrace-right-margin nil
+      ert-remote-temporary-file-directory
+      (let ((tramp-show-ad-hoc-proxies t) (non-essential t))
+	(expand-file-name ert-remote-temporary-file-directory))
       password-cache-expiry nil
       remote-file-name-inhibit-cache nil
       tramp-allow-unsafe-temporary-files t
@@ -238,6 +237,11 @@
       tramp-persistency-file-name nil
       tramp-verbose 0
       vc-handled-backends (unless noninteractive vc-handled-backends))
+
+(defconst tramp-test-vec
+  (and (file-remote-p ert-remote-temporary-file-directory)
+       (tramp-dissect-file-name ert-remote-temporary-file-directory))
+  "The used `tramp-file-name' structure.")
 
 (defconst tramp-test-name-prefix "tramp-test"
   "Prefix to use for temporary test files.")
@@ -2287,12 +2291,15 @@ being the result.")
 
 (ert-deftest tramp-test03-file-error ()
   "Check that Tramp signals an error in case of connection problems."
+  (skip-unless (tramp-file-name-p tramp-test-vec))
+
   ;; Connect to a non-existing host.
   (let ((vec (copy-tramp-file-name tramp-test-vec))
 	;; Don't poison it.
 	(tramp-default-proxies-alist tramp-default-proxies-alist)
 	(tramp-show-ad-hoc-proxies t))
     (cl-letf* (((symbol-function #'read-string) #'ignore) ; Suppress password.
+	       ((symbol-function #'y-or-n-p) #'ignore) ; distrobox.
 	       ((tramp-file-name-host vec) "example.com.invalid"))
       (should-error
        (file-exists-p (tramp-make-tramp-file-name vec))
@@ -5394,7 +5401,7 @@ This tests also `make-symbolic-link', `file-truename' and `add-name-to-file'."
   ;; boundaries are always incorrect before that.
   (skip-unless (tramp--test-emacs31-p))
 
-  (let ((remote (file-remote-p ert-remote-temporary-file-directory)))
+  (when-let* ((remote (file-remote-p ert-remote-temporary-file-directory)))
     (dolist
 	(file `(,remote ,(concat remote "/~/")
 		,(concat remote "/usr//usr/") ,(concat remote remote "//usr/")))
@@ -6515,13 +6522,12 @@ INPUT, if non-nil, is a string sent to the process."
 	       ;; 	(should (= 11 (point)))))))))))))
 	       )))))))))
 
-;; This test is inspired by Bug#23952.
+;; This test is inspired by Bug#23952 and Bug#80783.
 (ert-deftest tramp-test33-environment-variables ()
   "Check that remote processes set / unset environment variables properly."
   :tags '(:expensive-test)
   (skip-unless (tramp--test-enabled))
-  (skip-unless (tramp--test-sh-p))
-  (skip-unless (not (tramp--test-crypt-p)))
+  (skip-unless (tramp--test-supports-environment-variables-p))
 
   (dolist (this-shell-command-to-string
 	   (append
@@ -6550,6 +6556,21 @@ INPUT, if non-nil, is a string sent to the process."
 	  (format "%s,foo,tramp:%s\n" emacs-version tramp-version)
 	  (funcall
 	   this-shell-command-to-string "echo \"${INSIDE_EMACS:-bla}\""))))
+
+      ;; Check EMACSCLIENT_TRAMP.
+      (setenv "EMACSCLIENT_TRAMP")
+      (let ((tramp-propagate-emacsclient-tramp t))
+	(should
+	 (string-equal
+	  (format "%s\n" (tramp-make-tramp-file-name tramp-test-vec 'noloc))
+	  (funcall
+	   this-shell-command-to-string "echo \"${EMACSCLIENT_TRAMP:-bla}\""))))
+      (let (tramp-propagate-emacsclient-tramp)
+	(should
+	 (string-equal
+	  "bla\n"
+	  (funcall
+	   this-shell-command-to-string "echo \"${EMACSCLIENT_TRAMP:-bla}\""))))
 
       ;; Set a value.
       (let ((process-environment
@@ -6607,7 +6628,18 @@ INPUT, if non-nil, is a string sent to the process."
 	      ;; We must suppress "_=VAR...".
 	      (funcall
 	       this-shell-command-to-string
-	       "printenv | grep -v PS1 | grep -v _=")))))))))
+	       "printenv | grep -v PS1 | grep -v _="))))))
+
+      ;; Handle looooong environment variables.  Bug#80783.
+      ;; FIXME: Make it also work in the synchronous case.
+      (unless (or (eq this-shell-command-to-string 'shell-command-to-string)
+		  (tramp-direct-async-process-p))
+	(let* ((bad (concat envvar "=" (make-string 2024 ?x)))
+	       (process-environment
+		(cl-list* bad bad bad bad process-environment)))
+	  (should
+	   (string-match-p
+	    "foo" (funcall this-shell-command-to-string "echo foo"))))))))
 
 (tramp--test-deftest-direct-async-process tramp-test33-environment-variables)
 
@@ -6826,8 +6858,7 @@ INPUT, if non-nil, is a string sent to the process."
   "Check loooong `tramp-remote-path'."
   :tags '(:expensive-test)
   (skip-unless (tramp--test-enabled))
-  (skip-unless (tramp--test-sh-p))
-  (skip-unless (not (tramp--test-crypt-p)))
+  (skip-unless (tramp--test-supports-environment-variables-p))
 
   (let* ((tmp-name1 (tramp--test-make-temp-name))
 	 (default-directory ert-remote-temporary-file-directory)
@@ -7766,6 +7797,11 @@ This requires restrictions of file name syntax."
   (or (tramp--test-adb-p) (tramp--test-gvfs-p)
       (tramp--test-sh-p) (tramp--test-smb-p)
       (tramp--test-sudoedit-p)))
+
+(defun tramp--test-supports-environment-variables-p ()
+  "Return whether setting environment variables is supported."
+  (and (tramp--test-sh-p)
+       (not (tramp--test-crypt-p))))
 
 (defun tramp--test-check-files (&rest files)
   "Run a simple but comprehensive test over every file in FILES."
@@ -8884,6 +8920,9 @@ process sentinels.  They shall not disturb each other."
 	  (intern
 	   (string-remove-suffix
 	    "-file-name-handler" (symbol-name file-name-handler)))))
+    ;; Cleanup.
+    (tramp-remove-external-operation #'tramp--test-operation backend)
+    (tramp-remove-external-operation #'process-id backend)
 
     ;; There is no backend specific code.
     (should-not
@@ -8914,6 +8953,9 @@ process sentinels.  They shall not disturb each other."
     ;; This doesn't hurt.
     (tramp-add-external-operation
      #'tramp--test-operation #'tramp--handle-test-operation backend 'file)
+    (should
+     (eq #'tramp--handle-test-operation
+	 (tramp-external-operation-p #'tramp--test-operation backend)))
 
     ;; The backend specific function is called.
     (should
@@ -8941,6 +8983,7 @@ process sentinels.  They shall not disturb each other."
 
     (tramp-remove-external-operation #'tramp--test-operation backend)
     ;; There is no backend specific code.
+    (should-not (tramp-external-operation-p #'tramp--test-operation backend))
     (should-not
      (string-equal (tramp--test-operation ert-remote-temporary-file-directory)
 		   (tramp--handle-test-operation
@@ -8968,6 +9011,9 @@ process sentinels.  They shall not disturb each other."
     (tramp-add-external-operation
      #'tramp--test-operation #'tramp--handle-test-operation
      backend 'default-directory)
+    (should
+     (eq #'tramp--handle-test-operation
+	 (tramp-external-operation-p #'tramp--test-operation backend)))
 
     ;; The backend specific function is called.
     (let ((default-directory ert-remote-temporary-file-directory))
@@ -8981,6 +9027,7 @@ process sentinels.  They shall not disturb each other."
 
     (tramp-remove-external-operation #'tramp--test-operation backend)
     ;; There is no backend specific code.
+    (should-not (tramp-external-operation-p #'tramp--test-operation backend))
     (let ((default-directory ert-remote-temporary-file-directory))
       (should-not
        (string-equal (tramp--test-operation)
@@ -9012,16 +9059,48 @@ process sentinels.  They shall not disturb each other."
 	      (should (natnump (setq id (process-id proc))))
 	      (tramp-add-external-operation
 	       #'process-id #'tramp--handle-process-id backend 'process)
+	      (should
+	       (eq #'tramp--handle-process-id
+		   (tramp-external-operation-p #'process-id backend)))
 	      (should (= (process-id proc) (1+ id))))
 
 	  ;; Cleanup.
 	  (tramp-remove-external-operation #'process-id backend)
+	  (should-not (tramp-external-operation-p #'process-id backend))
 	  (ignore-errors (delete-process proc)))))
+
+    ;; Test `tramp-file-name' arg type.
+    (tramp-add-external-operation
+     #'tramp--test-operation #'tramp--handle-test-operation
+     backend 'tramp-file-name)
+    (should
+     (eq #'tramp--handle-test-operation
+	 (tramp-external-operation-p #'tramp--test-operation backend)))
+
+    ;; The backend specific function is called.
+    (should
+     (string-equal (tramp--test-operation tramp-test-vec)
+		   (tramp--handle-test-operation tramp-test-vec)))
+    (let ((vec (copy-tramp-file-name tramp-test-vec)))
+      (setf (tramp-file-name-method vec) (if (tramp--test-sh-p) "rclone" "sudo"))
+      (should-not
+       (string-equal (tramp--test-operation vec)
+		     (tramp--handle-test-operation vec))))
+
+    (tramp-remove-external-operation #'tramp--test-operation backend)
+    ;; There is no backend specific code.
+    (should-not (tramp-external-operation-p #'tramp--test-operation backend))
+    (should-not
+     (string-equal (tramp--test-operation tramp-test-vec)
+		   (tramp--handle-test-operation tramp-test-vec)))
 
     ;; Test function arg type.
     (tramp-add-external-operation
      #'tramp--test-operation #'tramp--handle-test-operation
      backend #'tramp--test-operation-file-name-for-operation)
+    (should
+     (eq #'tramp--handle-test-operation
+	 (tramp-external-operation-p #'tramp--test-operation backend)))
 
     ;; The backend specific function is called.
     (let ((default-directory ert-remote-temporary-file-directory))
@@ -9035,6 +9114,7 @@ process sentinels.  They shall not disturb each other."
 
     (tramp-remove-external-operation #'tramp--test-operation backend)
     ;; There is no backend specific code.
+    (should-not (tramp-external-operation-p #'tramp--test-operation backend))
     (let ((default-directory ert-remote-temporary-file-directory))
       (should-not
        (string-equal (tramp--test-operation)
@@ -9295,9 +9375,6 @@ If INTERACTIVE is non-nil, the tests are run interactively."
 ;;   `tramp-test45-asynchronous-requests'.
 
 ;; Use `skip-when' starting with Emacs 30.1.
-
-;; Starting with Emacs 29, use `ert-with-temp-file' and
-;; `ert-with-temp-directory'.
 
 (provide 'tramp-tests)
 
